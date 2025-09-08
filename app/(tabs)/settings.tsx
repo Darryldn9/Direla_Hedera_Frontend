@@ -10,12 +10,25 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User, Shield, Bell, Globe, CircleHelp as HelpCircle, LogOut, CreditCard, Smartphone, Lock, Eye, FileText, Phone, Mail, ChevronRight } from 'lucide-react-native';
+import PersonalInfoModal from '../../components/PersonalInfoModal';
+import PaymentMethodsModal from '../../components/PaymentMethodsModal';
+import TransactionHistoryModal from '../../components/TransactionHistoryModal';
+import PinChangeModal from '../../components/PinChangeModal';
+import PrivacySettingsModal from '../../components/PrivacySettingsModal';
 
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [offlineMode, setOfflineMode] = useState(true);
   const [autoSync, setAutoSync] = useState(true);
+  
+  // Modal states
+  const [showPersonalInfo, setShowPersonalInfo] = useState(false);
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [showTransactionHistory, setShowTransactionHistory] = useState(false);
+  const [showPinChange, setShowPinChange] = useState(false);
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false);
+  
   const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
@@ -78,19 +91,19 @@ export default function SettingsScreen() {
             icon={<User size={20} color="#0C7C59" />}
             title="Personal Information"
             subtitle="Nomsa Khumalo • +27 12 345 6789"
-            onPress={() => Alert.alert('Profile', 'Edit profile functionality')}
+            onPress={() => setShowPersonalInfo(true)}
           />
           <SettingItem
             icon={<CreditCard size={20} color="#3498DB" />}
             title="Payment Methods"
             subtitle="Manage cards and bank accounts"
-            onPress={() => Alert.alert('Payment Methods', 'Manage payment methods')}
+            onPress={() => setShowPaymentMethods(true)}
           />
           <SettingItem
             icon={<Eye size={20} color="#9B59B6" />}
             title="Transaction History"
             subtitle="View all your transactions"
-            onPress={() => Alert.alert('History', 'View transaction history')}
+            onPress={() => setShowTransactionHistory(true)}
           />
         </View>
 
@@ -101,7 +114,7 @@ export default function SettingsScreen() {
             icon={<Lock size={20} color="#E74C3C" />}
             title="Change PIN"
             subtitle="Update your security PIN"
-            onPress={() => Alert.alert('PIN', 'Change PIN functionality')}
+            onPress={() => setShowPinChange(true)}
           />
           <SettingItem
             icon={<Smartphone size={20} color="#F39C12" />}
@@ -120,7 +133,7 @@ export default function SettingsScreen() {
             icon={<Shield size={20} color="#2ECC71" />}
             title="Privacy Settings"
             subtitle="Control data sharing and visibility"
-            onPress={() => Alert.alert('Privacy', 'Privacy settings')}
+            onPress={() => setShowPrivacySettings(true)}
           />
         </View>
 
@@ -241,6 +254,32 @@ export default function SettingsScreen() {
 
         <View style={{ height: 50 }} />
       </ScrollView>
+
+      {/* Modals */}
+      <PersonalInfoModal
+        visible={showPersonalInfo}
+        onClose={() => setShowPersonalInfo(false)}
+      />
+      
+      <PaymentMethodsModal
+        visible={showPaymentMethods}
+        onClose={() => setShowPaymentMethods(false)}
+      />
+      
+      <TransactionHistoryModal
+        visible={showTransactionHistory}
+        onClose={() => setShowTransactionHistory(false)}
+      />
+      
+      <PinChangeModal
+        visible={showPinChange}
+        onClose={() => setShowPinChange(false)}
+      />
+      
+      <PrivacySettingsModal
+        visible={showPrivacySettings}
+        onClose={() => setShowPrivacySettings(false)}
+      />
     </SafeAreaView>
   );
 }
