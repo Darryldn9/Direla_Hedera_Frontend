@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TrendingUp, Shield, Clock, Users, DollarSign, Award, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, ArrowRight } from 'lucide-react-native';
+import { useAppMode } from '../../contexts/AppContext';
 
 interface LoanOffer {
   id: string;
@@ -33,10 +34,20 @@ interface LendingOpportunity {
 }
 
 export default function LendingScreen() {
+  const { mode } = useAppMode();
   const [activeTab, setActiveTab] = useState<'borrow' | 'lend' | 'business'>('borrow');
   const [loanAmount, setLoanAmount] = useState('');
   const [creditScore] = useState(742); // Based on transaction history
   const insets = useSafeAreaInsets();
+
+  // Set default tab based on mode
+  useEffect(() => {
+    if (mode === 'business') {
+      setActiveTab('business');
+    } else {
+      setActiveTab('borrow');
+    }
+  }, [mode]);
 
   const loanOffers: LoanOffer[] = [
     {
@@ -169,36 +180,55 @@ export default function LendingScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Lending Hub</Text>
-          <Text style={styles.headerSubtitle}>Powered by community trust</Text>
+          <Text style={styles.headerTitle}>
+            {mode === 'consumer' ? 'Lending Hub' : 'Business Lending'}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            {mode === 'consumer' ? 'Powered by community trust' : 'Business financing solutions'}
+          </Text>
         </View>
 
         {/* Tab Selector */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'borrow' && styles.activeTab]}
-            onPress={() => setActiveTab('borrow')}
-          >
-            <Text style={[styles.tabText, activeTab === 'borrow' && styles.activeTabText]}>
-              Borrow Money
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'lend' && styles.activeTab]}
-            onPress={() => setActiveTab('lend')}
-          >
-            <Text style={[styles.tabText, activeTab === 'lend' && styles.activeTabText]}>
-              Lend Money
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'business' && styles.activeTab]}
-            onPress={() => setActiveTab('business')}
-          >
-            <Text style={[styles.tabText, activeTab === 'business' && styles.activeTabText]}>
-              Business Loans
-            </Text>
-          </TouchableOpacity>
+          {mode === 'consumer' ? (
+            <>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'borrow' && styles.activeTab]}
+                onPress={() => setActiveTab('borrow')}
+              >
+                <Text style={[styles.tabText, activeTab === 'borrow' && styles.activeTabText]}>
+                  Borrow Money
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'lend' && styles.activeTab]}
+                onPress={() => setActiveTab('lend')}
+              >
+                <Text style={[styles.tabText, activeTab === 'lend' && styles.activeTabText]}>
+                  Lend Money
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'business' && styles.activeTab]}
+                onPress={() => setActiveTab('business')}
+              >
+                <Text style={[styles.tabText, activeTab === 'business' && styles.activeTabText]}>
+                  Business Loans
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'lend' && styles.activeTab]}
+                onPress={() => setActiveTab('lend')}
+              >
+                <Text style={[styles.tabText, activeTab === 'lend' && styles.activeTabText]}>
+                  Business Lending
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Credit Score Card */}
@@ -233,7 +263,7 @@ export default function LendingScreen() {
           </View>
         </View>
 
-        {activeTab === 'borrow' ? (
+        {(activeTab === 'borrow' && mode === 'consumer') ? (
           <>
             {/* Loan Application */}
             <View style={styles.applicationContainer}>
@@ -291,7 +321,7 @@ export default function LendingScreen() {
               ))}
             </View>
           </>
-        ) : activeTab === 'business' ? (
+        ) : (activeTab === 'business' && (mode === 'consumer' || mode === 'business')) ? (
           <>
             {/* Business Metrics */}
             <View style={styles.businessMetricsCard}>
@@ -408,7 +438,7 @@ export default function LendingScreen() {
               </View>
             </View>
           </>
-        ) : (
+        ) : (activeTab === 'lend') ? (
           <>
             {/* Lending Stats */}
             <View style={styles.lendingStats}>
@@ -471,7 +501,7 @@ export default function LendingScreen() {
               </Text>
             </View>
           </>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

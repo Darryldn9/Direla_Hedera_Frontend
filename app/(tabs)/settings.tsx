@@ -9,7 +9,9 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { User, Shield, Bell, Globe, CircleHelp as HelpCircle, LogOut, CreditCard, Smartphone, Lock, Eye, FileText, Phone, Mail, ChevronRight } from 'lucide-react-native';
+import { User, Shield, Bell, Globe, CircleHelp as HelpCircle, LogOut, CreditCard, Smartphone, Lock, Eye, FileText, Phone, Mail, ChevronRight, Users2, Building2 } from 'lucide-react-native';
+import { useAppMode } from '../../contexts/AppContext';
+import { router } from 'expo-router';
 import PersonalInfoModal from '../../components/PersonalInfoModal';
 import PaymentMethodsModal from '../../components/PaymentMethodsModal';
 import TransactionHistoryModal from '../../components/TransactionHistoryModal';
@@ -29,6 +31,7 @@ export default function SettingsScreen() {
   const [showPinChange, setShowPinChange] = useState(false);
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   
+  const { mode, setMode } = useAppMode();
   const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
@@ -82,6 +85,54 @@ export default function SettingsScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Settings</Text>
           <Text style={styles.headerSubtitle}>Manage your account and preferences</Text>
+        </View>
+
+        {/* App Mode Toggle */}
+        <View style={styles.modeToggleContainer}>
+          <View style={styles.modeToggleHeader}>
+            <Text style={styles.modeToggleTitle}>Account Type</Text>
+            <Text style={styles.modeToggleSubtitle}>
+              Switch between consumer and business features
+            </Text>
+          </View>
+          <View style={styles.modeOptions}>
+            <TouchableOpacity
+              style={[
+                styles.modeOption,
+                mode === 'consumer' && styles.modeOptionActive
+              ]}
+              onPress={() => {
+                setMode('consumer');
+                router.push('/(tabs)/');
+              }}
+            >
+              <Users2 size={20} color={mode === 'consumer' ? '#FFFFFF' : '#0C7C59'} />
+              <Text style={[
+                styles.modeOptionText,
+                mode === 'consumer' && styles.modeOptionTextActive
+              ]}>
+                Consumer
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modeOption,
+                mode === 'business' && styles.modeOptionActive
+              ]}
+              onPress={() => {
+                setMode('business');
+                router.push('/(tabs)/hub');
+              }}
+            >
+              <Building2 size={20} color={mode === 'business' ? '#FFFFFF' : '#0C7C59'} />
+              <Text style={[
+                styles.modeOptionText,
+                mode === 'business' && styles.modeOptionTextActive
+              ]}>
+                Business
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Profile Section */}
@@ -423,5 +474,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#E74C3C',
+  },
+  modeToggleContainer: {
+    backgroundColor: '#FFFFFF',
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8F9FA',
+  },
+  modeToggleHeader: {
+    marginBottom: 16,
+  },
+  modeToggleTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#2C3E50',
+    marginBottom: 4,
+  },
+  modeToggleSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#7F8C8D',
+  },
+  modeOptions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    gap: 8,
+  },
+  modeOptionActive: {
+    backgroundColor: '#0C7C59',
+    borderColor: '#0C7C59',
+  },
+  modeOptionText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#0C7C59',
+  },
+  modeOptionTextActive: {
+    color: '#FFFFFF',
   },
 });

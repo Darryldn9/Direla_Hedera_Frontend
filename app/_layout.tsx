@@ -15,6 +15,7 @@ import {
   Roboto_700Bold
 } from '@expo-google-fonts/roboto';
 import * as SplashScreen from 'expo-splash-screen';
+import { AppProvider } from '../contexts/AppContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,12 +43,12 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <AppProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
-    </>
+    </AppProvider>
   );
 }
