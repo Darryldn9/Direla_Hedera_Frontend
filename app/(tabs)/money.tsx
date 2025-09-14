@@ -4,56 +4,191 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DollarSign, CreditCard, PieChart, ArrowUpDown } from 'lucide-react-native';
+import { 
+  Zap, 
+  ChevronRight, 
+  Calendar,
+  DollarSign
+} from 'lucide-react-native';
 
 export default function MoneyScreen() {
   const insets = useSafeAreaInsets();
 
+  // Sample business data
+  const businessName = "Mama Thandi's Spaza Shop";
+  const userInitials = "MT";
+  const currentPayoutAmount = 4.34;
+  const minimumPayoutAmount = 50.00;
+  const isAboveMinimum = currentPayoutAmount >= minimumPayoutAmount;
+
+  // Sample payout history
+  const payoutHistory = [
+    { 
+      id: 1, 
+      type: 'Payout', 
+      date: '9 May 2024', 
+      amount: 16.34, 
+      fees: 35.16,
+      net: 16.34 - 35.16
+    },
+    { 
+      id: 2, 
+      type: 'Instant Payout', 
+      date: '8 May 2024', 
+      amount: -12.45, 
+      fees: 17.25,
+      net: -12.45 - 17.25
+    },
+    { 
+      id: 3, 
+      type: 'Instant Payout', 
+      date: '8 May 2024', 
+      amount: -12.45, 
+      fees: 17.25,
+      net: -12.45 - 17.25
+    },
+  ];
+
+  const handleInstantPayout = () => {
+    if (isAboveMinimum) {
+      Alert.alert('Instant Payout', 'Processing instant payout...');
+    } else {
+      Alert.alert(
+        'Payout Unavailable', 
+        `You need at least R${minimumPayoutAmount.toFixed(2)} to make a payout. Current amount: R${currentPayoutAmount.toFixed(2)}`
+      );
+    }
+  };
+
+  const handlePayoutsPress = () => {
+    Alert.alert('Payouts', 'Opening full payout history...');
+  };
+
+  const handlePayoutItemPress = (payout: any) => {
+    Alert.alert(
+      'Payout Details', 
+      `${payout.type}\nDate: ${payout.date}\nAmount: R${Math.abs(payout.amount).toFixed(2)}\nFees: R${payout.fees.toFixed(2)}`
+    );
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top - 10 }]} edges={[]}>
-      <ScrollView 
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]} edges={[]}>
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 34) + 82 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Money Management</Text>
-          <Text style={styles.headerSubtitle}>Manage your business finances</Text>
+          <View style={styles.userAvatar}>
+            <Text style={styles.avatarText}>{userInitials}</Text>
+          </View>
+          <View style={styles.businessBadge}>
+            <Text style={styles.businessBadgeText}>{businessName}</Text>
+          </View>
         </View>
 
-        {/* Placeholder Content */}
-        <View style={styles.placeholderContainer}>
-          <View style={styles.placeholderIcon}>
-            <DollarSign size={48} color="#0C7C59" />
-          </View>
-          <Text style={styles.placeholderTitle}>Financial Management</Text>
-          <Text style={styles.placeholderDescription}>
-            This page will contain your business financial tools, expense tracking, 
-            cash flow management, and financial reporting features.
+        {/* Payout Amount Display */}
+        <View style={styles.payoutContainer}>
+          <Text style={styles.payoutLabel}>Payout amount</Text>
+          <Text style={styles.payoutAmount}>R{currentPayoutAmount.toFixed(2)}</Text>
+          <Text style={styles.statusMessage}>
+            {isAboveMinimum 
+              ? 'Ready for payout' 
+              : 'You are below the minimum payout amount'
+            }
           </Text>
-          
-          <View style={styles.featuresList}>
-            <View style={styles.featureItem}>
-              <CreditCard size={20} color="#9B59B6" />
-              <Text style={styles.featureText}>Payment Processing</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <PieChart size={20} color="#F39C12" />
-              <Text style={styles.featureText}>Expense Tracking</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <ArrowUpDown size={20} color="#16A085" />
-              <Text style={styles.featureText}>Cash Flow Management</Text>
-            </View>
-          </View>
         </View>
 
-        {/* Coming Soon Badge */}
-        <View style={styles.comingSoonBadge}>
-          <Text style={styles.comingSoonText}>Coming Soon</Text>
+        {/* Instant Payout Button */}
+        <View style={styles.instantPayoutContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.instantPayoutButton,
+              !isAboveMinimum && styles.instantPayoutButtonDisabled
+            ]}
+            onPress={handleInstantPayout}
+            disabled={!isAboveMinimum}
+          >
+            <Zap size={20} color={isAboveMinimum ? "#0C7C59" : "#C7C7CC"} />
+            <Text style={[
+              styles.instantPayoutText,
+              !isAboveMinimum && styles.instantPayoutTextDisabled
+            ]}>
+              Instant payout
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Payouts Section */}
+        <TouchableOpacity 
+          style={styles.sectionHeader}
+          onPress={handlePayoutsPress}
+        >
+          <Text style={styles.sectionTitle}>Payouts</Text>
+          <ChevronRight size={20} color="#8E8E93" />
+        </TouchableOpacity>
+
+        {/* Payout History List */}
+        <View style={styles.payoutContainer}>
+          {payoutHistory.map((payout) => (
+            <TouchableOpacity
+              key={payout.id}
+              style={styles.payoutItem}
+              onPress={() => handlePayoutItemPress(payout)}
+            >
+              <View style={styles.payoutLeft}>
+                <View style={styles.payoutDetails}>
+                  <Text style={styles.payoutType}>{payout.type}</Text>
+                  <Text style={styles.payoutDate}>{payout.date}</Text>
+                </View>
+              </View>
+              <View style={styles.payoutRight}>
+                <Text style={[
+                  styles.payoutAmountText,
+                  { color: payout.amount < 0 ? '#FF3B30' : '#1C1C1E' }
+                ]}>
+                  {payout.amount < 0 ? '-' : ''}R{Math.abs(payout.amount).toFixed(2)}
+                </Text>
+                <Text style={styles.payoutFees}>
+                  Fees • R{payout.fees.toFixed(2)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Direla Section */}
+        <View style={styles.yocoCapitalSection}>
+          <Text style={styles.yocoCapitalTitle}>Direla</Text>
+          
+          <TouchableOpacity 
+            style={styles.findOutMoreButton}
+            onPress={() => Alert.alert('Find out more', 'Opening Direla information...')}
+          >
+            <Text style={styles.findOutMoreText}>Find out more</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Fees Section */}
+        <View style={styles.feesSection}>
+          <View style={styles.feesHeader}>
+            <Text style={styles.feesTitle}>Fees</Text>
+            <Text style={styles.feesDescription}>All the fees related to your business</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.feesButton}
+            onPress={() => Alert.alert('Fees', 'Opening detailed fee breakdown...')}
+          >
+            <View style={styles.feesIcon}>
+              <Text style={styles.percentageSymbol}>%</Text>
+            </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -63,94 +198,222 @@ export default function MoneyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F7', // iOS-like light gray (same as Hub)
   },
   scrollView: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 20,
-    paddingBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: '#F5F5F7',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#2C3E50',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
-  },
-  placeholderContainer: {
-    flex: 1,
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0C7C59',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
   },
-  placeholderIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F3E5F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  placeholderTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#2C3E50',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  placeholderDescription: {
+  avatarText: {
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  businessBadge: {
+    backgroundColor: '#E8E8EA',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  businessBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  payoutContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+    backgroundColor: '#F5F5F7',
+  },
+  payoutLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8E8E93',
+    marginBottom: 8,
+  },
+  payoutAmount: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 8,
+  },
+  statusMessage: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#8E8E93',
     textAlign: 'center',
-    lineHeight: 24,
+  },
+  instantPayoutContainer: {
+    paddingHorizontal: 20,
     marginBottom: 30,
   },
-  featuresList: {
-    alignSelf: 'stretch',
-    gap: 16,
-  },
-  featureItem: {
+  instantPayoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  instantPayoutButtonDisabled: {
+    backgroundColor: '#F8F9FA',
+    borderColor: '#E5E5E5',
+  },
+  instantPayoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0C7C59',
+  },
+  instantPayoutTextDisabled: {
+    color: '#C7C7CC',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#F5F5F7',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  payoutItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#F5F5F7',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  payoutLeft: {
+    flex: 1,
+  },
+  payoutDetails: {
+    flex: 1,
+  },
+  payoutType: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1C1C1E',
+    marginBottom: 2,
+  },
+  payoutDate: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
+  payoutRight: {
+    alignItems: 'flex-end',
+  },
+  payoutAmountText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 2,
+  },
+  payoutFees: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
+  yocoCapitalSection: {
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-    elevation: 2,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  featureText: {
+  yocoCapitalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 16,
+  },
+  findOutMoreButton: {
+    alignSelf: 'flex-start',
+  },
+  findOutMoreText: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '500',
+    color: '#8E8E93',
   },
-  comingSoonBadge: {
-    alignSelf: 'center',
-    backgroundColor: '#FFF3CD',
+  feesSection: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    borderRadius: 16,
     paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginTop: 20,
+    paddingVertical: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  comingSoonText: {
+  feesHeader: {
+    flex: 1,
+  },
+  feesTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  feesDescription: {
     fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#856404',
+    fontWeight: '400',
+    color: '#8E8E93',
+    lineHeight: 20,
+  },
+  feesButton: {
+    marginLeft: 16,
+  },
+  feesIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  percentageSymbol: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
 });

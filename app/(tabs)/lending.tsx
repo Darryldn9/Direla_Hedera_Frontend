@@ -171,19 +171,33 @@ export default function LendingScreen() {
     );
   };
 
+  // Sample business data (consistent with other pages)
+  const businessName = "Mama Thandi's Spaza Shop";
+  const userInitials = "MT";
+
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top - 10 }]} edges={[]}>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]} edges={[]}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 34) + 82 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header - Consistent with Hub/Sales/Money */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.avatarText}>{userInitials}</Text>
+          </View>
+          <View style={styles.businessBadge}>
+            <Text style={styles.businessBadgeText}>{businessName}</Text>
+          </View>
+        </View>
+
+        {/* Page Title */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.pageTitle}>
             {mode === 'consumer' ? 'Lending Hub' : 'Business Lending'}
           </Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={styles.pageSubtitle}>
             {mode === 'consumer' ? 'Powered by community trust' : 'Business financing solutions'}
           </Text>
         </View>
@@ -510,29 +524,58 @@ export default function LendingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F7', // iOS-like light gray (same as Hub/Sales/Money)
   },
   scrollView: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 20,
-    paddingBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: '#F5F5F7',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#2C3E50',
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0C7C59',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  businessBadge: {
+    backgroundColor: '#E8E8EA',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  businessBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  titleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  pageTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
     marginBottom: 4,
   },
-  headerSubtitle: {
+  pageSubtitle: {
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -557,8 +600,8 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#7F8C8D',
+    fontWeight: '500',
+    color: '#8E8E93',
   },
   activeTabText: {
     color: '#0C7C59',
@@ -568,12 +611,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 20,
     padding: 20,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   creditScoreHeader: {
     flexDirection: 'row',
@@ -583,12 +626,12 @@ const styles = StyleSheet.create({
   },
   creditScoreLabel: {
     fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#7F8C8D',
+    fontWeight: '500',
+    color: '#8E8E93',
   },
   creditScoreValue: {
     fontSize: 32,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
   },
   creditScoreIcon: {
     width: 48,
@@ -600,8 +643,8 @@ const styles = StyleSheet.create({
   },
   creditScoreDescription: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
     marginBottom: 12,
   },
   creditFactors: {
@@ -614,25 +657,25 @@ const styles = StyleSheet.create({
   },
   factorText: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#2C3E50',
+    fontWeight: '400',
+    color: '#1C1C1E',
   },
   applicationContainer: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 20,
     marginBottom: 20,
     padding: 20,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
     marginBottom: 16,
   },
   amountInputContainer: {
@@ -640,41 +683,41 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#2C3E50',
+    fontWeight: '500',
+    color: '#1C1C1E',
     marginBottom: 8,
   },
   amountInput: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8F9FA',
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 16,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#E5E5E5',
   },
   currencySymbol: {
     fontSize: 20,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
     color: '#0C7C59',
     marginRight: 8,
   },
   input: {
     flex: 1,
     fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
     paddingVertical: 16,
   },
   applyButton: {
     backgroundColor: '#0C7C59',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
   },
   applyButtonText: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   offersContainer: {
@@ -684,13 +727,13 @@ const styles = StyleSheet.create({
   offerCard: {
     backgroundColor: '#FFFFFF',
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   offerHeader: {
     flexDirection: 'row',
@@ -700,7 +743,7 @@ const styles = StyleSheet.create({
   },
   offerAmount: {
     fontSize: 24,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
     color: '#0C7C59',
   },
   lenderInfo: {
@@ -708,13 +751,13 @@ const styles = StyleSheet.create({
   },
   lenderName: {
     fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   lenderRating: {
     fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   offerDetails: {
     gap: 8,
@@ -727,13 +770,13 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   detailValue: {
     fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   selectOfferButton: {
     flexDirection: 'row',
@@ -742,43 +785,49 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: '#E8F5E8',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 16,
   },
   selectOfferText: {
     fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#0C7C59',
   },
   lendingStats: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     marginBottom: 20,
-    gap: 12,
+    gap: 8,
   },
   statCard: {
-    flex: 1,
+    width: '31%',
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 16,
     alignItems: 'center',
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
+    height: 110,
   },
   statValue: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
-    color: '#2C3E50',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
     marginTop: 8,
+    marginBottom: 4,
+    textAlign: 'center',
+    numberOfLines: 1,
   },
   statLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#8E8E93',
     textAlign: 'center',
     marginTop: 4,
+    numberOfLines: 2,
   },
   opportunitiesContainer: {
     paddingHorizontal: 20,
@@ -787,13 +836,13 @@ const styles = StyleSheet.create({
   opportunityCard: {
     backgroundColor: '#FFFFFF',
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   opportunityHeader: {
     flexDirection: 'row',
@@ -803,13 +852,13 @@ const styles = StyleSheet.create({
   },
   borrowerType: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   loanPurpose: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
     marginTop: 2,
   },
   riskBadge: {
@@ -819,7 +868,7 @@ const styles = StyleSheet.create({
   },
   riskText: {
     fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
   },
   opportunityDetails: {
     flexDirection: 'row',
@@ -829,12 +878,12 @@ const styles = StyleSheet.create({
   },
   loanAmount: {
     fontSize: 20,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
     color: '#0C7C59',
   },
   returnRate: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#F1C40F',
   },
   creditInfo: {
@@ -844,27 +893,27 @@ const styles = StyleSheet.create({
   },
   creditLabel: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   creditValue: {
     fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
   },
   termInfo: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   lendButton: {
     backgroundColor: '#0C7C59',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 16,
     alignItems: 'center',
   },
   lendButtonText: {
     fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   riskWarning: {
@@ -872,14 +921,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FDF2E9',
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 12,
     marginBottom: 20,
   },
   warningText: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontWeight: '400',
     color: '#E67E22',
     lineHeight: 20,
   },
@@ -888,12 +937,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 20,
     padding: 20,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -911,14 +960,14 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 18,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
     color: '#0C7C59',
     marginBottom: 4,
   },
   metricLabel: {
     fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
     textAlign: 'center',
   },
   businessCreditScore: {
@@ -931,49 +980,49 @@ const styles = StyleSheet.create({
   },
   businessCreditLabel: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#0C7C59',
   },
   businessCreditValue: {
     fontSize: 24,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
   },
   businessLoanDescription: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
     lineHeight: 20,
     marginBottom: 16,
   },
   businessOfferCard: {
     backgroundColor: '#FFFFFF',
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
     borderLeftWidth: 4,
     borderLeftColor: '#0C7C59',
   },
   requirementText: {
     fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
     fontStyle: 'italic',
   },
   businessBenefitsContainer: {
     backgroundColor: '#E8F5E8',
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 20,
   },
   benefitsTitle: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#0C7C59',
     marginBottom: 12,
   },
@@ -987,7 +1036,7 @@ const styles = StyleSheet.create({
   },
   benefitText: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontWeight: '400',
     color: '#0C7C59',
     flex: 1,
   },
