@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { CreditCard, Plus, Eye, EyeOff, ArrowUpRight, ArrowDownLeft, ShoppingCart, Users, Minus, Zap } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppMode } from '../../contexts/AppContext';
 import VirtualCard from '../../components/VirtualCard';
 import AppleWalletModal from '../../components/AppleWalletModal';
 
@@ -17,11 +18,18 @@ interface Transaction {
 export default function WalletScreen() {
   const [showBalance, setShowBalance] = useState(true);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
 
+  // Mode-aware data
+  const businessName = "Mama Thandi's Spaza Shop";
+  const personalName = "Nomsa Khumalo";
+  const userInitials = "NK"; // For consumer mode
+  const businessInitials = "MT"; // For business mode
+  
   const balance = 2847.50;
   const cardNumber = '4532 1234 5678 9012';
-  const holderName = 'Big D(reamer)';
+  const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
   const expiryDate = '12/28';
 
   const recentTransactions: Transaction[] = [
@@ -81,15 +89,28 @@ export default function WalletScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top - 10 }]} edges={[]}>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]} edges={[]}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 34) + 82 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header - Consistent with other pages */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Welcome, Chief Dreamer</Text>
-          <Text style={styles.subtitle}>Welcome to your Direla wallet</Text>
+          <View style={styles.userAvatar}>
+            <Text style={styles.avatarText}>{mode === 'business' ? businessInitials : userInitials}</Text>
+          </View>
+          <View style={styles.businessBadge}>
+            <Text style={styles.businessBadgeText}>
+              {mode === 'business' ? businessName : personalName}
+            </Text>
+          </View>
+        </View>
+
+        {/* Page Title */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.pageTitle}>Wallet</Text>
+          <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
         </View>
 
         <View style={styles.cardContainer}>
@@ -201,7 +222,7 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F7', // iOS-like light gray (same as other pages)
   },
   scrollView: {
     flex: 1,
@@ -210,18 +231,52 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    padding: 20,
-    paddingTop: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: '#F5F5F7',
   },
-  greeting: {
-    fontSize: 28,
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0C7C59',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  businessBadge: {
+    backgroundColor: '#E8E8EA',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  businessBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  titleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  pageTitle: {
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#2C3E50',
+    color: '#1C1C1E',
     marginBottom: 4,
   },
-  subtitle: {
+  pageSubtitle: {
     fontSize: 16,
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   cardContainer: {
     paddingHorizontal: 20,
@@ -247,7 +302,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#2C3E50',
+    color: '#1C1C1E',
     marginBottom: 15,
   },
   actionsGrid: {
@@ -259,12 +314,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
   },
   actionIcon: {
@@ -279,7 +334,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: '#1C1C1E',
   },
   features: {
     paddingHorizontal: 20,
@@ -290,13 +345,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   featureEmoji: {
     fontSize: 20,
@@ -304,7 +359,7 @@ const styles = StyleSheet.create({
   },
   featureTitle: {
     fontSize: 16,
-    color: '#2C3E50',
+    color: '#1C1C1E',
     fontWeight: '500',
     flex: 1,
   },
@@ -328,13 +383,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   transactionIcon: {
     width: 40,
@@ -351,12 +406,12 @@ const styles = StyleSheet.create({
   transactionDescription: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: '#1C1C1E',
     marginBottom: 2,
   },
   transactionTime: {
     fontSize: 14,
-    color: '#7F8C8D',
+    color: '#8E8E93',
   },
   transactionAmount: {
     alignItems: 'flex-end',

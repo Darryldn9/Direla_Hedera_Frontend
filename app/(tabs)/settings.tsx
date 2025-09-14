@@ -74,17 +74,35 @@ export default function SettingsScreen() {
     <Text style={styles.sectionHeader}>{title}</Text>
   );
 
+  // Mode-aware data (consistent with other pages)
+  const businessName = "Mama Thandi's Spaza Shop";
+  const personalName = "Nomsa Khumalo";
+  const userInitials = "NK"; // For consumer mode
+  const businessInitials = "MT"; // For business mode
+
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top - 10 }]} edges={[]}>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]} edges={[]}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 34) + 82 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header - Consistent with Hub/Sales/Money/Lending */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Settings</Text>
-          <Text style={styles.headerSubtitle}>Manage your account and preferences</Text>
+          <View style={styles.userAvatar}>
+            <Text style={styles.avatarText}>{mode === 'business' ? businessInitials : userInitials}</Text>
+          </View>
+          <View style={styles.businessBadge}>
+            <Text style={styles.businessBadgeText}>
+              {mode === 'business' ? businessName : personalName}
+            </Text>
+          </View>
+        </View>
+
+        {/* Page Title */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.pageTitle}>Settings</Text>
+          <Text style={styles.pageSubtitle}>Manage your account and preferences</Text>
         </View>
 
         {/* App Mode Toggle */}
@@ -136,22 +154,22 @@ export default function SettingsScreen() {
         </View>
 
         {/* Profile Section */}
+        <SectionHeader title="Profile" />
         <View style={styles.section}>
-          <SectionHeader title="Profile" />
           <SettingItem
-            icon={<User size={20} color="#0C7C59" />}
+            icon={<User size={18} color="#0C7C59" />}
             title="Personal Information"
             subtitle="Nomsa Khumalo • +27 12 345 6789"
             onPress={() => setShowPersonalInfo(true)}
           />
           <SettingItem
-            icon={<CreditCard size={20} color="#3498DB" />}
+            icon={<CreditCard size={18} color="#3498DB" />}
             title="Payment Methods"
             subtitle="Manage cards and bank accounts"
             onPress={() => setShowPaymentMethods(true)}
           />
           <SettingItem
-            icon={<Eye size={20} color="#9B59B6" />}
+            icon={<Eye size={18} color="#9B59B6" />}
             title="Transaction History"
             subtitle="View all your transactions"
             onPress={() => setShowTransactionHistory(true)}
@@ -159,16 +177,16 @@ export default function SettingsScreen() {
         </View>
 
         {/* Security Section */}
+        <SectionHeader title="Security & Privacy" />
         <View style={styles.section}>
-          <SectionHeader title="Security & Privacy" />
           <SettingItem
-            icon={<Lock size={20} color="#E74C3C" />}
+            icon={<Lock size={18} color="#E74C3C" />}
             title="Change PIN"
             subtitle="Update your security PIN"
             onPress={() => setShowPinChange(true)}
           />
           <SettingItem
-            icon={<Smartphone size={20} color="#F39C12" />}
+            icon={<Smartphone size={18} color="#F39C12" />}
             title="Biometric Authentication"
             subtitle="Use fingerprint or face ID"
             rightElement={
@@ -181,7 +199,7 @@ export default function SettingsScreen() {
             }
           />
           <SettingItem
-            icon={<Shield size={20} color="#2ECC71" />}
+            icon={<Shield size={18} color="#2ECC71" />}
             title="Privacy Settings"
             subtitle="Control data sharing and visibility"
             onPress={() => setShowPrivacySettings(true)}
@@ -189,10 +207,10 @@ export default function SettingsScreen() {
         </View>
 
         {/* Notifications Section */}
+        <SectionHeader title="Notifications" />
         <View style={styles.section}>
-          <SectionHeader title="Notifications" />
           <SettingItem
-            icon={<Bell size={20} color="#F1C40F" />}
+            icon={<Bell size={18} color="#F1C40F" />}
             title="Push Notifications"
             subtitle="Get notified about transactions"
             rightElement={
@@ -205,7 +223,7 @@ export default function SettingsScreen() {
             }
           />
           <SettingItem
-            icon={<Mail size={20} color="#3498DB" />}
+            icon={<Mail size={18} color="#3498DB" />}
             title="Email Notifications"
             subtitle="Receive updates via email"
             onPress={() => Alert.alert('Email', 'Email notification settings')}
@@ -213,16 +231,16 @@ export default function SettingsScreen() {
         </View>
 
         {/* App Settings */}
+        <SectionHeader title="App Settings" />
         <View style={styles.section}>
-          <SectionHeader title="App Settings" />
           <SettingItem
-            icon={<Globe size={20} color="#16A085" />}
+            icon={<Globe size={18} color="#16A085" />}
             title="Language"
             subtitle="English (South Africa)"
             onPress={() => Alert.alert('Language', 'Language selection')}
           />
           <SettingItem
-            icon={<Globe size={20} color="#8E44AD" />}
+            icon={<Globe size={18} color="#8E44AD" />}
             title="Offline Mode"
             subtitle="Allow transactions without internet"
             rightElement={
@@ -235,7 +253,7 @@ export default function SettingsScreen() {
             }
           />
           <SettingItem
-            icon={<Globe size={20} color="#E67E22" />}
+            icon={<Globe size={18} color="#E67E22" />}
             title="Auto Sync"
             subtitle="Sync data when connected"
             rightElement={
@@ -250,22 +268,22 @@ export default function SettingsScreen() {
         </View>
 
         {/* Support Section */}
+        <SectionHeader title="Support" />
         <View style={styles.section}>
-          <SectionHeader title="Support" />
           <SettingItem
-            icon={<HelpCircle size={20} color="#3498DB" />}
+            icon={<HelpCircle size={18} color="#3498DB" />}
             title="Help Center"
             subtitle="Get help and find answers"
             onPress={() => Alert.alert('Help', 'Help center functionality')}
           />
           <SettingItem
-            icon={<Phone size={20} color="#27AE60" />}
+            icon={<Phone size={18} color="#27AE60" />}
             title="Contact Support"
             subtitle="Speak to our support team"
             onPress={() => Alert.alert('Support', 'Contact: +27 11 123 4567')}
           />
           <SettingItem
-            icon={<FileText size={20} color="#7F8C8D" />}
+            icon={<FileText size={18} color="#8E8E93" />}
             title="Terms & Privacy Policy"
             subtitle="Read our terms and privacy policy"
             onPress={() => Alert.alert('Legal', 'Terms and privacy policy')}
@@ -338,55 +356,92 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F7', // iOS-like light gray (same as other pages)
   },
   scrollView: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 20,
-    paddingBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: '#F5F5F7',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#2C3E50',
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0C7C59',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  businessBadge: {
+    backgroundColor: '#E8E8EA',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  businessBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  titleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  pageTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
     marginBottom: 4,
   },
-  headerSubtitle: {
+  pageSubtitle: {
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   section: {
-    marginTop: 20,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    overflow: 'hidden',
   },
   sectionHeader: {
     fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#7F8C8D',
+    fontWeight: '600',
+    color: '#8E8E93',
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 16,
     marginLeft: 20,
     letterSpacing: 0.5,
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F8F9FA',
   },
   settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#F8F9FA',
     justifyContent: 'center',
     alignItems: 'center',
@@ -397,31 +452,36 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   settingSubtitle: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
     marginTop: 2,
   },
   hederaSection: {
     backgroundColor: '#E8F4FD',
     marginHorizontal: 20,
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 12,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   hederaTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#2980B9',
     marginBottom: 8,
   },
   hederaDescription: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontWeight: '400',
     color: '#2980B9',
     marginBottom: 12,
     lineHeight: 20,
@@ -431,30 +491,38 @@ const styles = StyleSheet.create({
   },
   featureItem: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontWeight: '400',
     color: '#2980B9',
   },
   appInfo: {
     alignItems: 'center',
-    marginTop: 30,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
     marginBottom: 20,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   appInfoTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#0C7C59',
     marginBottom: 4,
   },
   appInfoVersion: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
     marginBottom: 8,
   },
   appInfoDescription: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#2C3E50',
+    fontWeight: '500',
+    color: '#1C1C1E',
     textAlign: 'center',
   },
   logoutButton: {
@@ -464,38 +532,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 8,
-    marginTop: 20,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#E74C3C',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   logoutText: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#E74C3C',
   },
   modeToggleContainer: {
     backgroundColor: '#FFFFFF',
-    marginTop: 20,
+    marginHorizontal: 20,
+    marginBottom: 20,
     paddingHorizontal: 20,
     paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8F9FA',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   modeToggleHeader: {
     marginBottom: 16,
   },
   modeToggleTitle: {
     fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
     marginBottom: 4,
   },
   modeToggleSubtitle: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   modeOptions: {
     flexDirection: 'row',
@@ -509,7 +587,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: 'transparent',
     gap: 8,
@@ -520,7 +598,7 @@ const styles = StyleSheet.create({
   },
   modeOptionText: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#0C7C59',
   },
   modeOptionTextActive: {

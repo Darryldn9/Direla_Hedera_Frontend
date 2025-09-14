@@ -171,9 +171,11 @@ export default function LendingScreen() {
     );
   };
 
-  // Sample business data (consistent with other pages)
+  // Mode-aware data (consistent with other pages)
   const businessName = "Mama Thandi's Spaza Shop";
-  const userInitials = "MT";
+  const personalName = "Nomsa Khumalo";
+  const userInitials = "NK"; // For consumer mode
+  const businessInitials = "MT"; // For business mode
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]} edges={[]}>
@@ -185,10 +187,12 @@ export default function LendingScreen() {
         {/* Header - Consistent with Hub/Sales/Money */}
         <View style={styles.header}>
           <View style={styles.userAvatar}>
-            <Text style={styles.avatarText}>{userInitials}</Text>
+            <Text style={styles.avatarText}>{mode === 'business' ? businessInitials : userInitials}</Text>
           </View>
           <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>{businessName}</Text>
+            <Text style={styles.businessBadgeText}>
+              {mode === 'business' ? businessName : personalName}
+            </Text>
           </View>
         </View>
 

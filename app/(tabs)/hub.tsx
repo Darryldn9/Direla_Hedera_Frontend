@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -17,19 +17,33 @@ import {
   Plus 
 } from 'lucide-react-native';
 
+import NewSaleModal from '../../components/NewSaleModal';
+
 export default function HubScreen() {
   const insets = useSafeAreaInsets();
+  const [showNewSaleModal, setShowNewSaleModal] = useState(false);
   
-  // Sample business data
+  // Sample business data (will be updated by sales)
   const businessName = "Mama Thandi's Spaza Shop";
   const userInitials = "MT";
-  const todaysRevenue = 1247.50;
+  const [todaysRevenue, setTodaysRevenue] = useState(1247.50);
   const inventoryAlerts = 3;
-  const monthlySales = 142;
+  const [monthlySales, setMonthlySales] = useState(142);
   const isOnline = true;
 
   const handleNewSale = () => {
-    Alert.alert('New Sale', 'Starting new sale transaction...');
+    setShowNewSaleModal(true);
+  };
+
+  const handleSaleComplete = (amount: number, method: string) => {
+    // Update today's revenue
+    setTodaysRevenue(prev => prev + amount);
+    
+    // Update monthly sales count
+    setMonthlySales(prev => prev + 1);
+    
+    // Here you could also add to transaction history, update inventory, etc.
+    console.log(`Sale completed: R${amount.toFixed(2)} via ${method}`);
   };
 
   const handleCardPress = (cardName: string) => {
@@ -156,6 +170,13 @@ export default function HubScreen() {
           </View>
         </View>
       </ScrollView>
+      
+      {/* New Sale Modal */}
+      <NewSaleModal
+        visible={showNewSaleModal}
+        onClose={() => setShowNewSaleModal(false)}
+        onSaleComplete={handleSaleComplete}
+      />
     </SafeAreaView>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useAppMode } from '../../contexts/AppContext';
 import {
   QrCode,
   MessageCircle,
@@ -44,7 +45,14 @@ export default function PayScreen() {
   const [showCamera, setShowCamera] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
+
+  // Mode-aware data
+  const businessName = "Mama Thandi's Spaza Shop";
+  const personalName = "Nomsa Khumalo";
+  const userInitials = "NK"; // For consumer mode
+  const businessInitials = "MT"; // For business mode
 
 
   const quickContacts: QuickContact[] = [
@@ -161,33 +169,33 @@ export default function PayScreen() {
   }) => (
     <TouchableOpacity
       style={[
-        styles.methodButton,
-        paymentMethod === method && styles.methodButtonActive
+        styles.methodCard,
+        paymentMethod === method && styles.methodCardActive
       ]}
       onPress={() => handleMethodSelect(method)}
     >
-      <View style={[
-        styles.methodIcon,
-        { backgroundColor: paymentMethod === method ? 'rgba(255, 255, 255, 0.2)' : '#F8F9FA' }
-      ]}>
-        {icon}
-      </View>
-      <View style={styles.methodInfo}>
+      <View style={styles.methodCardContent}>
+        <View style={[
+          styles.methodCardIcon,
+          { backgroundColor: paymentMethod === method ? 'rgba(255, 255, 255, 0.2)' : '#F8F9FA' }
+        ]}>
+          {icon}
+        </View>
         <Text style={[
-          styles.methodTitle,
-          paymentMethod === method && styles.methodTitleActive
+          styles.methodCardTitle,
+          paymentMethod === method && styles.methodCardTitleActive
         ]}>
           {title}
         </Text>
         <Text style={[
-          styles.methodDescription,
-          paymentMethod === method && styles.methodDescriptionActive
+          styles.methodCardDescription,
+          paymentMethod === method && styles.methodCardDescriptionActive
         ]}>
           {description}
         </Text>
       </View>
       {paymentMethod === method && (
-        <View style={styles.activeIndicator} />
+        <View style={styles.methodActiveIndicator} />
       )}
     </TouchableOpacity>
   );
@@ -219,44 +227,65 @@ export default function PayScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: insets.top - 10 }]} edges={[]}>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]} edges={[]}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 34) + 82 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header - Consistent with other pages */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Send Payment</Text>
-          <Text style={styles.headerSubtitle}>Choose your payment method</Text>
+          <View style={styles.userAvatar}>
+            <Text style={styles.avatarText}>{mode === 'business' ? businessInitials : userInitials}</Text>
+          </View>
+          <View style={styles.businessBadge}>
+            <Text style={styles.businessBadgeText}>
+              {mode === 'business' ? businessName : personalName}
+            </Text>
+          </View>
         </View>
 
-        {/* Payment Methods */}
+        {/* Page Title */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.pageTitle}>Send Payment</Text>
+          <Text style={styles.pageSubtitle}>Choose your payment method</Text>
+        </View>
+
+        {/* Payment Methods - 2x2 Grid */}
         <View style={styles.methodsContainer}>
-          <PaymentMethodButton
-            method="qr"
-            icon={<QrCode size={24} color={paymentMethod === 'qr' ? '#FFFFFF' : '#0C7C59'} />}
-            title={requestingPermission ? "Requesting Permission..." : "QR Code"}
-            description="Scan to pay instantly"
-          />
-          <PaymentMethodButton
-            method="whatsapp"
-            icon={<MessageCircle size={24} color={paymentMethod === 'whatsapp' ? '#FFFFFF' : '#25D366'} />}
-            title="WhatsApp Pay"
-            description="Send via WhatsApp message"
-          />
-          <PaymentMethodButton
-            method="tap"
-            icon={<Nfc size={24} color={paymentMethod === 'tap' ? '#FFFFFF' : '#3498DB'} />}
-            title="Tap to Pay"
-            description="NFC contactless payment"
-          />
-          <PaymentMethodButton
-            method="contacts"
-            icon={<Users size={24} color={paymentMethod === 'contacts' ? '#FFFFFF' : '#9B59B6'} />}
-            title="Contacts"
-            description="Send to phone number"
-          />
+          <Text style={styles.methodsSectionTitle}>Payment Methods</Text>
+          
+          {/* Top Row */}
+          <View style={styles.methodsRow}>
+            <PaymentMethodButton
+              method="qr"
+              icon={<QrCode size={20} color={paymentMethod === 'qr' ? '#FFFFFF' : '#0C7C59'} />}
+              title={requestingPermission ? "Requesting..." : "QR Code"}
+              description="Scan to pay"
+            />
+            <PaymentMethodButton
+              method="whatsapp"
+              icon={<MessageCircle size={20} color={paymentMethod === 'whatsapp' ? '#FFFFFF' : '#25D366'} />}
+              title="WhatsApp"
+              description="Send via chat"
+            />
+          </View>
+
+          {/* Bottom Row */}
+          <View style={styles.methodsRow}>
+            <PaymentMethodButton
+              method="tap"
+              icon={<Nfc size={20} color={paymentMethod === 'tap' ? '#FFFFFF' : '#3498DB'} />}
+              title="Tap to Pay"
+              description="NFC payment"
+            />
+            <PaymentMethodButton
+              method="contacts"
+              icon={<Users size={20} color={paymentMethod === 'contacts' ? '#FFFFFF' : '#9B59B6'} />}
+              title="Contacts"
+              description="Phone number"
+            />
+          </View>
         </View>
 
         {/* Amount Input */}
@@ -365,83 +394,129 @@ export default function PayScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F7', // iOS-like light gray (same as other pages)
   },
   scrollView: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 20,
-    paddingBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: '#F5F5F7',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#2C3E50',
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0C7C59',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  businessBadge: {
+    backgroundColor: '#E8E8EA',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  businessBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  titleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  pageTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
     marginBottom: 4,
   },
-  headerSubtitle: {
+  pageSubtitle: {
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   methodsContainer: {
-    padding: 20,
-    gap: 12,
+    paddingHorizontal: 20,
+    marginBottom: 30,
   },
-  methodButton: {
+  methodsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 16,
+  },
+  methodsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  methodCard: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    elevation: 2,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
+    minHeight: 120,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  methodButtonActive: {
+  methodCardActive: {
     backgroundColor: '#0C7C59',
     borderColor: '#0C7C59',
-    elevation: 4,
     shadowOpacity: 0.15,
   },
-  methodIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
+  methodCardContent: {
+    padding: 16,
     alignItems: 'center',
-    marginRight: 16,
-  },
-  methodInfo: {
+    justifyContent: 'center',
     flex: 1,
   },
-  methodTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
-    marginBottom: 2,
+  methodCardIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  methodTitleActive: {
+  methodCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  methodCardTitleActive: {
     color: '#FFFFFF',
   },
-  methodDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+  methodCardDescription: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#8E8E93',
+    textAlign: 'center',
   },
-  methodDescriptionActive: {
+  methodCardDescriptionActive: {
     color: 'rgba(255, 255, 255, 0.9)',
   },
-  activeIndicator: {
+  methodActiveIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -453,30 +528,30 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
     marginBottom: 8,
   },
   amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 16,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#E5E5E5',
   },
   currencySymbol: {
     fontSize: 24,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
     color: '#0C7C59',
     marginRight: 8,
   },
   amountInput: {
     flex: 1,
     fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#2C3E50',
+    fontWeight: 'bold',
+    color: '#1C1C1E',
     paddingVertical: 16,
   },
   quickContactsContainer: {
@@ -485,8 +560,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
     marginBottom: 16,
   },
   contactsList: {
@@ -508,18 +583,18 @@ const styles = StyleSheet.create({
   },
   contactName: {
     fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#2C3E50',
+    fontWeight: '500',
+    color: '#1C1C1E',
   },
   phoneInput: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#2C3E50',
+    fontWeight: '400',
+    color: '#1C1C1E',
     marginTop: 16,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#E5E5E5',
   },
   merchantsContainer: {
@@ -537,13 +612,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 8,
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   merchantIcon: {
     width: 40,
@@ -559,14 +634,14 @@ const styles = StyleSheet.create({
   },
   merchantName: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#2C3E50',
+    fontWeight: '600',
+    color: '#1C1C1E',
     marginBottom: 2,
   },
   merchantCategory: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#7F8C8D',
+    fontWeight: '400',
+    color: '#8E8E93',
   },
   billSplitContainer: {
     paddingHorizontal: 20,
@@ -577,18 +652,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 12,
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   billSplitText: {
     flex: 1,
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#9B59B6',
   },
   payButton: {
@@ -598,31 +673,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#0C7C59',
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     gap: 8,
     marginBottom: 20,
   },
   payButtonText: {
     fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   hederaInfo: {
     backgroundColor: '#FFF3CD',
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 20,
   },
   infoTitle: {
     fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#856404',
     marginBottom: 4,
   },
   infoText: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontWeight: '400',
     color: '#856404',
     lineHeight: 20,
   },
@@ -665,7 +740,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 100,
     fontSize: 16,
-    fontFamily: 'Inter-Medium',
+    fontWeight: '500',
     color: '#FFFFFF',
     textAlign: 'center',
     paddingHorizontal: 40,
