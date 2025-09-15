@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 8,
   },
   pageTitle: {
     fontSize: 32,
@@ -583,7 +583,9 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    margin: 20,
+    marginHorizontal: 20,
+    marginTop: 4,
+    marginBottom: 20,
     backgroundColor: '#E5E5E5',
     borderRadius: 12,
     padding: 4,
