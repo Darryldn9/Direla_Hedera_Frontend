@@ -24,22 +24,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loadMode = async () => {
     try {
       const savedMode = await AsyncStorage.getItem(APP_MODE_KEY);
+      console.log('🔍 AppContext: Loading saved mode from storage:', savedMode);
       if (savedMode && (savedMode === 'consumer' || savedMode === 'business')) {
+        console.log('✅ AppContext: Setting mode to:', savedMode);
         setModeState(savedMode as AppMode);
+      } else {
+        console.log('📱 AppContext: No saved mode found, using default: consumer');
       }
     } catch (error) {
-      console.error('Error loading app mode:', error);
+      console.error('❌ AppContext: Error loading app mode:', error);
     } finally {
+      console.log('🏁 AppContext: Finished loading, isLoading = false');
       setIsLoading(false);
     }
   };
 
   const setMode = async (newMode: AppMode) => {
     try {
+      console.log('💾 AppContext: Saving new mode to storage:', newMode);
       await AsyncStorage.setItem(APP_MODE_KEY, newMode);
+      console.log('🔄 AppContext: Updating state to:', newMode);
       setModeState(newMode);
     } catch (error) {
-      console.error('Error saving app mode:', error);
+      console.error('❌ AppContext: Error saving app mode:', error);
     }
   };
 
