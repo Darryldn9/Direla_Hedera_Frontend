@@ -40,7 +40,6 @@ interface NearbyMerchant {
 
 export default function PayScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'qr' | 'whatsapp' | 'tap' | 'contacts' | null>(null);
-  const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState('');
   const [showCamera, setShowCamera] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
@@ -81,14 +80,9 @@ export default function PayScreen() {
       return;
     }
 
-    if (!amount || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
-      return;
-    }
 
     const paymentData = {
       method: paymentMethod,
-      amount: parseFloat(amount),
       recipient,
       timestamp: new Date().toISOString(),
     };
@@ -96,10 +90,9 @@ export default function PayScreen() {
     // Simulate Interledger processing
     Alert.alert(
       'Payment Initiated',
-      `Processing R${amount} payment via ${paymentMethod.toUpperCase()}. Transaction will be processed on Hedera Hashgraph for instant settlement.`,
+      `Processing payment via ${paymentMethod.toUpperCase()}. Transaction will be processed on Hedera Hashgraph for instant settlement.`,
       [
         { text: 'OK', onPress: () => {
-          setAmount('');
           setRecipient('');
         }}
       ]
@@ -288,21 +281,6 @@ export default function PayScreen() {
           </View>
         </View>
 
-        {/* Amount Input */}
-        <View style={styles.amountContainer}>
-          <Text style={styles.amountLabel}>Amount (ZAR)</Text>
-          <View style={styles.amountInputContainer}>
-            <Text style={styles.currencySymbol}>R</Text>
-            <TextInput
-              style={styles.amountInput}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0.00"
-              keyboardType="numeric"
-              placeholderTextColor="#BDC3C7"
-            />
-          </View>
-        </View>
 
         {/* Quick Contacts - Show when contacts method is selected */}
         {paymentMethod === 'contacts' && (
@@ -338,7 +316,7 @@ export default function PayScreen() {
         {/* Nearby Merchants */}
         <View style={styles.merchantsContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nearby Merchants</Text>
+            <Text style={styles.sectionTitle}>Nearby Merchants on Direla</Text>
             <TouchableOpacity>
               <MapPin size={20} color="#0C7C59" />
             </TouchableOpacity>
@@ -372,9 +350,9 @@ export default function PayScreen() {
         <TouchableOpacity style={styles.payButton} onPress={handlePayment}>
           <Zap size={20} color="#FFFFFF" />
           <Text style={styles.payButtonText}>
-            {paymentMethod === 'qr' ? 'Generate QR Code' :
-             paymentMethod === 'whatsapp' ? 'Send via WhatsApp' :
+            {paymentMethod === 'whatsapp' ? 'Send via WhatsApp' :
              paymentMethod === 'tap' ? 'Ready to Tap' :
+             paymentMethod === 'qr' ? 'Scan QR Code' :
              'Send Payment'}
           </Text>
         </TouchableOpacity>
@@ -449,7 +427,7 @@ const styles = StyleSheet.create({
   },
   methodsContainer: {
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 12,
   },
   methodsSectionTitle: {
     fontSize: 18,
@@ -522,38 +500,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#F1C40F',
   },
-  amountContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  amountLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 8,
-  },
-  amountInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-  },
-  currencySymbol: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0C7C59',
-    marginRight: 8,
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
-    paddingVertical: 16,
-  },
   quickContactsContainer: {
     paddingHorizontal: 20,
     marginBottom: 20,
@@ -605,7 +551,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 4,
   },
   merchantItem: {
     flexDirection: 'row',

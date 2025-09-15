@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Building2, BarChart3, DollarSign, Users, Settings } from 'lucide-react-native';
+import { Building2, BarChart3, Banknote, Users, Settings } from 'lucide-react-native';
 
 export default function BusinessTabLayout() {
   return (
@@ -47,7 +47,7 @@ export default function BusinessTabLayout() {
         options={{
           title: 'Money',
           tabBarIcon: ({ size, color }) => (
-            <DollarSign size={size} color={color} />
+            <Banknote size={size} color={color} />
           ),
         }}
       />
