@@ -25,6 +25,12 @@ export const API_ENDPOINTS = {
   // Health
   HEALTH: '/health',
   
+  // Authentication
+  AUTH_SIGNUP: '/auth/signup',
+  AUTH_SIGNIN: '/auth/signin',
+  AUTH_LOGOUT: '/auth/logout',
+  AUTH_ME: '/auth/me',
+  
   // Users
   USERS: '/users',
   USER_BY_ID: (id: string | number) => `/users/${id}`,

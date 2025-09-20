@@ -29,6 +29,9 @@ export class BaseApiService {
   ): Promise<ApiResponse<T>> {
     const url = `${this.config.baseUrl}${endpoint}`;
     
+    console.log('🌐 Making request to:', url);
+    console.log('📋 Request options:', { method: options.method, body: options.body });
+    
     const defaultHeaders = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -51,8 +54,11 @@ export class BaseApiService {
 
       clearTimeout(timeoutId);
 
+      console.log('📡 Response status:', response.status, response.statusText);
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.log('❌ Error response data:', errorData);
         throw new ApiError(
           errorData.error || `HTTP ${response.status}: ${response.statusText}`,
           response.status,
@@ -61,8 +67,10 @@ export class BaseApiService {
       }
 
       const data: ApiResponse<T> = await response.json();
+      console.log('✅ Success response data:', data);
       return data;
     } catch (error: any) {
+      console.log('💥 Request error:', error);
       if (error instanceof ApiError) {
         throw error;
       }

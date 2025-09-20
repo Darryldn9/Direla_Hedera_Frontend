@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ApiResponse, ApiError } from '../types/api';
+import { ApiResponse, IApiError } from '../types/api';
 
 export interface UseApiState<T> {
   data: T | null;
@@ -30,9 +30,12 @@ export function useApi<T = any>(
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
+      console.log('🌐 Making API call with args:', args);
       const response = await apiFunction(...args);
+      console.log('📡 Raw API response:', response);
       
       if (response.success && response.data !== undefined) {
+        console.log('✅ API success, data:', response.data);
         setState({
           data: response.data,
           loading: false,
@@ -41,6 +44,7 @@ export function useApi<T = any>(
         });
         return response.data;
       } else {
+        console.log('❌ API error response:', response);
         setState({
           data: null,
           loading: false,
@@ -50,6 +54,7 @@ export function useApi<T = any>(
         return null;
       }
     } catch (error) {
+      console.log('💥 API exception:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setState({
         data: null,

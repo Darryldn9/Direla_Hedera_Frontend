@@ -97,7 +97,7 @@ export function useHederaOperations() {
     selectAccount,
     refreshAccountBalance,
     refreshAllBalances,
-    getAccountBalance: getAccountBalanceLocal,
+    getAccountBalanceLocal,
     ...accounts,
     ...balances,
   };

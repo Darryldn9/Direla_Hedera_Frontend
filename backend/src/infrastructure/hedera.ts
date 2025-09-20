@@ -419,6 +419,10 @@ export class HederaInfrastructure {
    */
   async createTopic(): Promise<string> {
     try {
+      // Do we need to create a new topic every time the app runs?
+      return "0.0.6880055";
+
+      /*
       logger.info('Creating HCS topic');
 
       const transaction = new TopicCreateTransaction();
@@ -437,6 +441,7 @@ export class HederaInfrastructure {
       } else {
         throw new Error('Failed to create HCS topic');
       }
+    */
     } catch (error) {
       logger.error('Failed to create HCS topic', { error });
       throw error;

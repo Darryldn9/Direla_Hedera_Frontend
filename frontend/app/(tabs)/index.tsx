@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAppMode } from '../../contexts/AppContext';
 import VirtualCard from '../../components/VirtualCard';
 import AppleWalletModal from '../../components/AppleWalletModal';
+import { useUserManagement } from '../../hooks/useAuth';
 
 interface Transaction {
   id: string;
@@ -21,13 +22,16 @@ export default function WalletScreen() {
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
 
+  const { currentUser } = useUserManagement();
+
+  const balance = currentUser?.balance ?? 0;
+
   // Mode-aware data
   const businessName = "Mama Thandi's Spaza Shop";
   const personalName = "Nomsa Khumalo";
   const userInitials = "NK"; // For consumer mode
   const businessInitials = "MT"; // For business mode
   
-  const balance = 2847.50;
   const cardNumber = '4532 1234 5678 9012';
   const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
   const expiryDate = '12/28';

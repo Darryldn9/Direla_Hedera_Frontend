@@ -11,6 +11,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User, Shield, Bell, Globe, CircleHelp as HelpCircle, LogOut, CreditCard, Smartphone, Lock, Eye, FileText, Phone, Mail, ChevronRight, Users2, Building2 } from 'lucide-react-native';
 import { useAppMode } from '../../contexts/AppContext';
+import { useUserManagement } from '../../hooks/useAuth';
 import { router } from 'expo-router';
 import PersonalInfoModal from '../../components/PersonalInfoModal';
 import PaymentMethodsModal from '../../components/PaymentMethodsModal';
@@ -32,6 +33,7 @@ export default function SettingsScreen() {
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   
   const { mode, setMode } = useAppMode();
+  const { logout } = useUserManagement();
   const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
@@ -40,7 +42,10 @@ export default function SettingsScreen() {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => console.log('Logged out') }
+        { text: 'Logout', style: 'destructive', onPress: async () => {
+          await logout();
+          router.push('/login');
+        }}
       ]
     );
   };

@@ -2,20 +2,24 @@ import { Router } from 'express';
 import { UserRoutes } from './user.routes.js';
 import { HederaRoutes } from './hedera.routes.js';
 import { HederaAccountRoutes } from './hedera-account.routes.js';
+import { AuthRoutes } from './auth.routes.js';
 import diagnosticsRoutes from './diagnostics.routes.js';
 import { UserService, HederaService, HederaAccountService } from '../types/index.js';
+import { AuthService } from '../services/auth.service.js';
 
 export class Routes {
   private router: Router;
   private userRoutes: UserRoutes;
   private hederaRoutes: HederaRoutes;
   private hederaAccountRoutes: HederaAccountRoutes;
+  private authRoutes: AuthRoutes;
 
   constructor(userService: UserService, hederaService: HederaService, hederaAccountService: HederaAccountService) {
     this.router = Router();
     this.userRoutes = new UserRoutes(userService);
     this.hederaRoutes = new HederaRoutes(hederaService);
     this.hederaAccountRoutes = new HederaAccountRoutes(hederaAccountService);
+    this.authRoutes = new AuthRoutes(new AuthService());
     this.setupRoutes();
   }
 
@@ -55,6 +59,7 @@ export class Routes {
     });
 
     // API routes
+    this.router.use('/auth', this.authRoutes.getRouter());
     this.router.use('/users', this.userRoutes.getRouter());
     this.router.use('/hedera', this.hederaRoutes.getRouter());
     this.router.use('/hedera-accounts', this.hederaAccountRoutes.getRouter());
