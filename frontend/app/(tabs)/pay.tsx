@@ -11,6 +11,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAppMode } from '../../contexts/AppContext';
+import { useAccount } from '../../contexts/AccountContext';
+import { useUserManagement } from '../../hooks/useAuth';
+import { usePaymentManager } from '../../hooks/usePayments';
+import { ProcessPaymentWithDIDRequest } from '../../types/api';
 import {
   QrCode,
   MessageCircle,
@@ -38,21 +42,36 @@ interface NearbyMerchant {
   rating: number;
 }
 
+interface QRPaymentData {
+  toAccountId: string; // Backend expects 'toAccountId'
+  amount: number;
+  currency: string;
+  accountAlias?: string;
+  memo?: string; // Optional memo for transaction
+  merchant_user_id?: string; // For DID logging
+  timestamp: string;
+}
+
 export default function PayScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'qr' | 'whatsapp' | 'tap' | 'contacts' | null>(null);
   const [recipient, setRecipient] = useState('');
   const [showCamera, setShowCamera] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
+  
+  // Payment processing hooks
+  const { selectedAccount } = useAccount();
+  const { currentUser } = useUserManagement();
+  const { makePayment } = usePaymentManager();
 
   // Mode-aware data
   const businessName = "Mama Thandi's Spaza Shop";
   const personalName = "Nomsa Khumalo";
   const userInitials = "NK"; // For consumer mode
   const businessInitials = "MT"; // For business mode
-
 
   const quickContacts: QuickContact[] = [
     { id: '1', name: 'Thabo', phone: '+27123456789', avatar: '👨🏾' },
@@ -69,7 +88,69 @@ export default function PayScreen() {
   ];
 
 
-  const handlePayment = () => {
+  const processQRPayment = async (paymentData: QRPaymentData) => {
+    // Validate that we have a selected account to send from
+    if (!selectedAccount) {
+      Alert.alert(
+        'No Account Selected',
+        'Please select an account to send from in the settings.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Set the recipient to the account ID from QR code
+    setRecipient(paymentData.toAccountId);
+    setIsProcessingPayment(true);
+    
+    try {
+      // Prepare payment request for backend
+      const paymentRequest: ProcessPaymentWithDIDRequest = {
+        fromAccountId: selectedAccount.account_id,
+        toAccountId: paymentData.toAccountId,
+        amount: paymentData.amount,
+        memo: paymentData.memo || `Payment to ${paymentData.accountAlias || paymentData.toAccountId}`,
+        merchant_user_id: paymentData.merchant_user_id
+      };
+
+      // Process the payment
+      const result = await makePayment(paymentRequest);
+
+      console.log("[DEBUG] PAYMENT RESULT", result);
+      
+      if (result?.success && result.transactionId) {
+        // Payment successful
+        Alert.alert(
+          'Payment Successful!',
+          `${paymentData.amount.toFixed(2)} ${paymentData.currency} sent to ${paymentData.accountAlias || paymentData.toAccountId}\n\nTransaction ID: ${result.transactionId}\n\nTransaction processed on Hedera Hashgraph for instant settlement.`,
+          [
+            { text: 'OK', onPress: () => {
+              setPaymentMethod(null);
+              setRecipient('');
+            }}
+          ]
+        );
+      } else {
+        // Payment failed
+        Alert.alert(
+          'Payment Failed',
+          result?.error || 'Unknown error occurred while processing payment.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      Alert.alert(
+        'Payment Error',
+        'An error occurred while processing the payment. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handlePayment = async () => {
     if (!paymentMethod) {
       Alert.alert('Error', 'Please select a payment method first');
       return;
@@ -80,37 +161,124 @@ export default function PayScreen() {
       return;
     }
 
+    // For other payment methods, we need a recipient
+    if (!recipient) {
+      Alert.alert('Error', 'Please enter a recipient for the payment');
+      return;
+    }
 
-    const paymentData = {
-      method: paymentMethod,
-      recipient,
-      timestamp: new Date().toISOString(),
-    };
+    // Validate that we have a selected account to send from
+    if (!selectedAccount) {
+      Alert.alert(
+        'No Account Selected',
+        'Please select an account to send from in the settings.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
-    // Simulate Interledger processing
-    Alert.alert(
-      'Payment Initiated',
-      `Processing payment via ${paymentMethod.toUpperCase()}. Transaction will be processed on Hedera Hashgraph for instant settlement.`,
-      [
-        { text: 'OK', onPress: () => {
-          setRecipient('');
-        }}
-      ]
-    );
+    setIsProcessingPayment(true);
+
+    try {
+      // For now, we'll treat other payment methods as transfers to the recipient
+      // In a real app, you'd have different logic for each payment method
+      const paymentRequest: ProcessPaymentWithDIDRequest = {
+        fromAccountId: selectedAccount.account_id,
+        toAccountId: recipient, // Assuming recipient is an account ID
+        amount: 1.0, // Default amount - in real app, this would come from user input
+        memo: `Payment via ${paymentMethod.toUpperCase()}`,
+        merchant_user_id: currentUser?.user_id
+      };
+
+      const result = await makePayment(paymentRequest);
+      
+      if (result?.success && result.transactionId) {
+        Alert.alert(
+          'Payment Successful!',
+          `Payment sent via ${paymentMethod.toUpperCase()}\n\nTransaction ID: ${result.transactionId}\n\nTransaction processed on Hedera Hashgraph for instant settlement.`,
+          [
+            { text: 'OK', onPress: () => {
+              setRecipient('');
+              setPaymentMethod(null);
+            }}
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Payment Failed',
+          result?.error || 'Unknown error occurred while processing payment.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      Alert.alert(
+        'Payment Error',
+        'An error occurred while processing the payment. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
   const handleQRCodeScanned = ({ data }: { data: string }) => {
     setShowCamera(false);
-    Alert.alert(
-      'QR Code Scanned',
-      `Scanned data: ${data}`,
-      [
-        { text: 'OK', onPress: () => {
-          // Here you would process the QR code data
-          // For now, we'll just show it
-        }}
-      ]
-    );
+    
+    try {
+      // Parse the QR code data as JSON
+      const paymentData: QRPaymentData = JSON.parse(data);
+      
+      // Validate that it contains the expected payment fields
+      if (paymentData.toAccountId && paymentData.amount && paymentData.currency) {
+        // Display payment confirmation with extracted data
+        Alert.alert(
+          'Payment Request Detected',
+          `Pay ${paymentData.amount.toFixed(2)} ${paymentData.currency} to ${paymentData.accountAlias || paymentData.toAccountId}?`,
+          [
+            { 
+              text: 'Cancel', 
+              style: 'cancel',
+              onPress: () => {
+                setPaymentMethod(null);
+                setRecipient('');
+              }
+            },
+            { 
+              text: 'Pay Now', 
+              onPress: () => {
+                processQRPayment(paymentData);
+              }
+            }
+          ]
+        );
+      } else {
+        // Handle invalid QR code format
+        Alert.alert(
+          'Invalid QR Code',
+          'This QR code does not contain valid payment information.',
+          [
+            { text: 'OK', onPress: () => {
+              setPaymentMethod(null);
+              setRecipient('');
+            }}
+          ]
+        );
+      }
+    } catch (error) {
+      // Handle non-JSON QR codes or parsing errors
+      console.error('Error parsing QR code data:', error);
+      Alert.alert(
+        'Invalid QR Code',
+        'This QR code is not a valid payment request.',
+        [
+          { text: 'OK', onPress: () => {
+            setPaymentMethod(null);
+            setRecipient('');
+          }}
+        ]
+      );
+    }
   };
 
   const handleMethodSelect = async (method: 'qr' | 'whatsapp' | 'tap' | 'contacts') => {
@@ -347,10 +515,15 @@ export default function PayScreen() {
         </View>
 
         {/* Payment Button */}
-        <TouchableOpacity style={styles.payButton} onPress={handlePayment}>
+        <TouchableOpacity 
+          style={[styles.payButton, isProcessingPayment && styles.payButtonProcessing]} 
+          onPress={handlePayment}
+          disabled={isProcessingPayment}
+        >
           <Zap size={20} color="#FFFFFF" />
           <Text style={styles.payButtonText}>
-            {paymentMethod === 'whatsapp' ? 'Send via WhatsApp' :
+            {isProcessingPayment ? 'Processing...' :
+             paymentMethod === 'whatsapp' ? 'Send via WhatsApp' :
              paymentMethod === 'tap' ? 'Ready to Tap' :
              paymentMethod === 'qr' ? 'Scan QR Code' :
              'Send Payment'}
@@ -627,6 +800,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  payButtonProcessing: {
+    backgroundColor: '#95A5A6',
+    opacity: 0.7,
   },
   hederaInfo: {
     backgroundColor: '#FFF3CD',

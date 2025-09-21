@@ -61,7 +61,7 @@ export class HederaInfrastructure {
         .setAccountId(AccountId.fromString(accountId));
       
       const balance = await query.execute(this.client);
-      const hbarBalance = Number(balance.hbars.toString());
+      const hbarBalance = balance.hbars.toBigNumber().toNumber();
       
       logger.debug('Account balance retrieved', { accountId, balance: hbarBalance });
       return hbarBalance;

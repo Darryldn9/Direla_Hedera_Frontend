@@ -15,7 +15,7 @@ export const getApiConfig = (): ApiConfig => {
   return {
     ...defaultApiConfig,
     baseUrl: isDevelopment 
-      ? 'http://localhost:3000/api' 
+      ? 'http://196.47.226.255:3000/api' 
       : 'https://your-production-api.com/api',
   };
 };

@@ -4,9 +4,9 @@ import { api } from '../services/api';
 import { 
   TransferRequest, 
   PaymentRequest, 
-  PaymentResult, 
-  PaymentValidation 
 } from '../types/api';
+import { PaymentResult, PaymentValidation } from '../services/api/payment.service';
+
 
 /**
  * Hook for payment operations
@@ -14,22 +14,22 @@ import {
 export function usePayments() {
   const processPayment = useApi<PaymentResult>(api.payment.processPayment.bind(api.payment));
   const transferHbar = useApi<PaymentResult>(api.payment.transferHbar.bind(api.payment));
-  const calculateTransactionFee = useApi<number>(api.payment.calculateTransactionFee.bind(api.payment));
-  const getPaymentMethods = useApi<string[]>(api.payment.getPaymentMethods.bind(api.payment));
-  const processRefund = useApi<PaymentResult>(api.payment.processRefund.bind(api.payment));
-  const getPaymentStatus = useApi<{ status: string; confirmed: boolean }>(api.payment.getPaymentStatus.bind(api.payment));
-  const cancelPayment = useApi<boolean>(api.payment.cancelPayment.bind(api.payment));
-  const getPaymentHistory = useApi<any[]>(api.payment.getPaymentHistory.bind(api.payment));
+  // const calculateTransactionFee = useApi<number>(api.payment.calculateTransactionFee.bind(api.payment));
+  // const getPaymentMethods = useApi<string[]>(api.payment.getPaymentMethods.bind(api.payment));
+  // const processRefund = useApi<PaymentResult>(api.payment.processRefund.bind(api.payment));
+  // const getPaymentStatus = useApi<{ status: string; confirmed: boolean }>(api.payment.getPaymentStatus.bind(api.payment));
+  // const cancelPayment = useApi<boolean>(api.payment.cancelPayment.bind(api.payment));
+  // const getPaymentHistory = useApi<any[]>(api.payment.getPaymentHistory.bind(api.payment));
 
   return {
     processPayment,
     transferHbar,
-    calculateTransactionFee,
-    getPaymentMethods,
-    processRefund,
-    getPaymentStatus,
-    cancelPayment,
-    getPaymentHistory,
+    // calculateTransactionFee,
+    // getPaymentMethods,
+    // processRefund,
+    // getPaymentStatus,
+    // cancelPayment,
+    // getPaymentHistory,
   };
 }
 
@@ -45,6 +45,8 @@ export function usePaymentManager() {
 
   const makePayment = useCallback(async (paymentData: PaymentRequest) => {
     const result = await payments.processPayment.execute(paymentData);
+    
+    console.log("[DEBUG] MAKE PAYMENT RESULT", result);
     
     if (result?.success && result.transactionId) {
       // Add to pending payments
@@ -82,7 +84,7 @@ export function usePaymentManager() {
         amount: transferData.amount,
         to: transferData.toAccountId,
         from: transferData.fromAccountId,
-        memo: transferData.memo,
+        // memo: transferData.memo,
         timestamp: new Date().toISOString(),
         status: 'pending'
       };
@@ -93,37 +95,37 @@ export function usePaymentManager() {
     return result;
   }, [payments.transferHbar]);
 
-  const checkPaymentStatus = useCallback(async (transactionId: string) => {
-    const status = await payments.getPaymentStatus.execute(transactionId);
+  // const checkPaymentStatus = useCallback(async (transactionId: string) => {
+  //   const status = await payments.getPaymentStatus.execute(transactionId);
     
-    if (status?.confirmed) {
-      // Remove from pending payments
-      setPendingPayments(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(transactionId);
-        return newSet;
-      });
+  //   if (status?.confirmed) {
+  //     // Remove from pending payments
+  //     setPendingPayments(prev => {
+  //       const newSet = new Set(prev);
+  //       newSet.delete(transactionId);
+  //       return newSet;
+  //     });
       
-      // Update transaction status
-      setRecentTransactions(prev => 
-        prev.map(tx => 
-          tx.id === transactionId 
-            ? { ...tx, status: 'confirmed' }
-            : tx
-        )
-      );
-    }
+  //     // Update transaction status
+  //     setRecentTransactions(prev => 
+  //       prev.map(tx => 
+  //         tx.id === transactionId 
+  //           ? { ...tx, status: 'confirmed' }
+  //           : tx
+  //       )
+  //     );
+  //   }
     
-    return status;
-  }, [payments.getPaymentStatus]);
+  //   return status;
+  // }, [payments.getPaymentStatus]);
 
-  const refreshPaymentHistory = useCallback(async (accountId: string) => {
-    const history = await payments.getPaymentHistory.execute(accountId);
-    if (history) {
-      setPaymentHistory(history);
-    }
-    return history;
-  }, [payments.getPaymentHistory]);
+  // const refreshPaymentHistory = useCallback(async (accountId: string) => {
+  //   const history = await payments.getPaymentHistory.execute(accountId);
+  //   if (history) {
+  //     setPaymentHistory(history);
+  //   }
+  //   return history;
+  // }, [payments.getPaymentHistory]);
 
   const clearPaymentHistory = useCallback(() => {
     setPaymentHistory([]);
@@ -144,8 +146,8 @@ export function usePaymentManager() {
     recentTransactions,
     makePayment,
     makeTransfer,
-    checkPaymentStatus,
-    refreshPaymentHistory,
+    // checkPaymentStatus,
+    // refreshPaymentHistory,
     clearPaymentHistory,
     getPendingPaymentsCount,
     hasPendingPayments,

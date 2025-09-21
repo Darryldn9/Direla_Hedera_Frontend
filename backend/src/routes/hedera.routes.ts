@@ -99,7 +99,11 @@ export class HederaRoutes {
       if (result.status === 'SUCCESS') {
         res.json({
           success: true,
-          data: result,
+          data: {
+            transactionId: result.transactionId,
+            status: result.status,
+            message: result.message
+          },
           message: 'Transfer completed successfully'
         });
       } else {
@@ -206,7 +210,11 @@ export class HederaRoutes {
       if (result.status === 'SUCCESS') {
         res.json({
           success: true,
-          data: result,
+          data: {
+            transactionId: result.transactionId,
+            status: result.status,
+            message: result.message
+          },
           message: 'Payment processed successfully'
         });
       } else {

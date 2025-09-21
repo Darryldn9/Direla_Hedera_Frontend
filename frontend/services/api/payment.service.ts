@@ -25,7 +25,7 @@ export class PaymentService extends BaseApiService {
   /**
    * Process a payment between accounts
    */
-  async processPayment(paymentData: PaymentRequest): Promise<PaymentResult> {
+  async processPayment(paymentData: PaymentRequest): Promise<ApiResponse<PaymentResult>> {
     try {
       // Validate payment before processing
       const validation = await this.validatePayment(paymentData);
@@ -33,27 +33,42 @@ export class PaymentService extends BaseApiService {
         return {
           success: false,
           error: 'Payment validation failed',
-          validation
+          data: {
+            success: false,
+            error: 'Payment validation failed',
+            validation
+          }
         };
       }
 
       const response = await this.post<TransactionResponse>(API_ENDPOINTS.HEDERA_PAYMENT, paymentData);
-      
+
       if (response.success && response.data) {
         return {
           success: true,
-          transactionId: response.data.transactionId
+          data: {
+            success: true,
+            transactionId: response.data.transactionId
+          }
         };
       }
 
       return {
         success: false,
-        error: response.error || 'Payment processing failed'
+        error: response.error || 'Payment processing failed',
+        data: {
+          success: false,
+          error: response.error || 'Payment processing failed'
+        }
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        data: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        }
       };
     }
   }
@@ -61,7 +76,7 @@ export class PaymentService extends BaseApiService {
   /**
    * Transfer HBAR between accounts
    */
-  async transferHbar(transferData: TransferRequest): Promise<PaymentResult> {
+  async transferHbar(transferData: TransferRequest): Promise<ApiResponse<PaymentResult>> {
     try {
       // Validate transfer before processing
       const validation = await this.validateTransfer(transferData);
@@ -69,7 +84,11 @@ export class PaymentService extends BaseApiService {
         return {
           success: false,
           error: 'Transfer validation failed',
-          validation
+          data: {
+            success: false,
+            error: 'Transfer validation failed',
+            validation
+          }
         };
       }
 
@@ -78,18 +97,29 @@ export class PaymentService extends BaseApiService {
       if (response.success && response.data) {
         return {
           success: true,
-          transactionId: response.data.transactionId
+          data: {
+            success: true,
+            transactionId: response.data.transactionId
+          }
         };
       }
 
       return {
         success: false,
-        error: response.error || 'Transfer failed'
+        error: response.error || 'Transfer failed',
+        data: {
+          success: false,
+          error: response.error || 'Transfer failed'
+        }
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        data: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        }
       };
     }
   }

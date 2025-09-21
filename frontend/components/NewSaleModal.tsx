@@ -19,6 +19,9 @@ import {
   MessageCircle,
   CheckCircle 
 } from 'lucide-react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { useAccount } from '../contexts/AccountContext';
+import { useUserManagement } from '../hooks/useAuth';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -35,8 +38,12 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
   const [amount, setAmount] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showQRDialog, setShowQRDialog] = useState(false);
+  
+  const { selectedAccount } = useAccount();
+  const { currentUser } = useUserManagement();
 
-  const slideAnim = new Animated.Value(SCREEN_HEIGHT);
+  const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   React.useEffect(() => {
     if (visible) {
@@ -44,6 +51,9 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       setAmount('');
       setSelectedMethod(null);
       setIsProcessing(false);
+      setShowQRDialog(false);
+      // Reset animation value before starting
+      slideAnim.setValue(SCREEN_HEIGHT);
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -81,6 +91,9 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
 
   const handlePaymentMethodSelect = (method: PaymentMethod) => {
     setSelectedMethod(method);
+    if (method === 'qr') {
+      setShowQRDialog(true);
+    }
   };
 
   const handleProcessPayment = async () => {
@@ -125,6 +138,22 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
 
   const handleClearAmount = () => {
     setAmount('');
+  };
+
+  const generateQRCodeData = () => {
+    if (!selectedAccount || !amount) return '';
+    
+    const qrData = {
+      toAccountId: selectedAccount.account_id, // Backend expects 'toAccountId'
+      amount: parseFloat(amount) / 100, // Convert from cents to main unit
+      currency: 'HBAR', // Backend processes HBAR, not ZAR
+      accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
+      memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`, // Optional memo for transaction
+      merchant_user_id: currentUser?.user_id, // For DID logging
+      timestamp: new Date().toISOString()
+    };
+    
+    return JSON.stringify(qrData);
   };
 
   const PaymentMethodButton = ({ 
@@ -176,6 +205,8 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
             styles.modalContainer,
             { transform: [{ translateY: slideAnim }] }
           ]}
+          onStartShouldSetResponder={() => true}
+          onResponderGrant={() => {}}
         >
           {/* Header */}
           <View style={styles.header}>
@@ -353,6 +384,80 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
           )}
         </Animated.View>
       </View>
+
+      {/* QR Code Dialog */}
+      <Modal
+        visible={showQRDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowQRDialog(false)}
+      >
+        <View style={styles.qrOverlay}>
+          <View style={styles.qrDialog}>
+            <View style={styles.qrHeader}>
+              <Text style={styles.qrTitle}>QR Code Payment</Text>
+              <TouchableOpacity 
+                onPress={() => setShowQRDialog(false)}
+                style={styles.qrCloseButton}
+              >
+                <X size={24} color="#1C1C1E" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.qrContent}>
+              <View style={styles.qrCodeContainer}>
+                {selectedAccount && amount ? (
+                  <QRCode
+                    value={generateQRCodeData()}
+                    size={180}
+                    color="#1C1C1E"
+                    backgroundColor="#FFFFFF"
+                  />
+                ) : (
+                  <View style={styles.qrCodePlaceholder}>
+                    <QrCode size={80} color="#8E8E93" />
+                    <Text style={styles.qrPlaceholderText}>QR Code will appear here</Text>
+                  </View>
+                )}
+              </View>
+              
+              <View style={styles.qrAmountDisplay}>
+                <Text style={styles.qrAmountText}>{formatAmount(amount)} HBAR</Text>
+                <Text style={styles.qrAmountLabel}>Amount to be paid</Text>
+              </View>
+              
+              {selectedAccount && (
+                <View style={styles.qrAccountInfo}>
+                  <Text style={styles.qrAccountLabel}>Receiving Account:</Text>
+                  <Text style={styles.qrAccountId}>{selectedAccount.alias}</Text>
+                </View>
+              )}
+              
+              <Text style={styles.qrInstructions}>
+                Customer should scan this QR code with their mobile payment app to complete the transaction.
+              </Text>
+            </View>
+            
+            <View style={styles.qrActions}>
+              <TouchableOpacity
+                style={styles.qrCancelButton}
+                onPress={() => setShowQRDialog(false)}
+              >
+                <Text style={styles.qrCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.qrConfirmButton}
+                onPress={() => {
+                  setShowQRDialog(false);
+                  handleProcessPayment();
+                }}
+              >
+                <Text style={styles.qrConfirmButtonText}>Mark as Paid</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -556,6 +661,144 @@ const styles = StyleSheet.create({
   },
   processButtonText: {
     fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  
+  // QR Code Dialog Styles
+  qrOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  qrDialog: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  qrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  qrTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  qrCloseButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrContent: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  qrCodeContainer: {
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  qrCodePlaceholder: {
+    width: 200,
+    height: 200,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E5E5E5',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrPlaceholderText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  qrAmountDisplay: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  qrAmountText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  qrAmountLabel: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  qrAccountInfo: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  qrAccountLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  qrAccountId: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    textAlign: 'center',
+  },
+  qrAccountAlias: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  qrInstructions: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  qrActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    gap: 12,
+  },
+  qrCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+  },
+  qrCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  qrConfirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#0C7C59',
+    alignItems: 'center',
+  },
+  qrConfirmButtonText: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
   },
