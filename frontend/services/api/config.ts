@@ -41,10 +41,12 @@ export const API_ENDPOINTS = {
   HEDERA_ACCOUNT_BALANCE: (accountId: string) => `/hedera-accounts/balance/${accountId}`,
   HEDERA_ACCOUNT_INFO: (accountId: string) => `/hedera-accounts/info/${accountId}`,
   HEDERA_ACCOUNTS_ACTIVE: '/hedera-accounts/active',
+  HEDERA_ACCOUNTS_BY_USER: (userId: string) => `/hedera-accounts/user/${userId}`,
   
   // Hedera Operations
   HEDERA_TRANSFER: '/hedera/transfer',
   HEDERA_PAYMENT: '/hedera/payment',
+  HEDERA_TRANSACTION_HISTORY: (accountId: string) => `/hedera/transaction-history/${accountId}`,
   
   // Transactions (with DID logging)
   TRANSACTIONS: '/transactions',

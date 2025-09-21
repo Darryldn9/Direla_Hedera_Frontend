@@ -15,6 +15,7 @@ export class HederaAccountRoutes {
   private setupRoutes(): void {
     this.router.get('/', this.getAllAccounts.bind(this));
     this.router.get('/active', this.getActiveAccounts.bind(this));
+    this.router.get('/user/:userId', this.getAccountsByUserId.bind(this));
     this.router.get('/:id', this.getAccountById.bind(this));
     this.router.get('/balance/:accountId', this.getAccountBalance.bind(this));
     this.router.get('/info/:accountId', this.getAccountInfo.bind(this));
@@ -121,6 +122,98 @@ export class HederaAccountRoutes {
       res.status(500).json({
         success: false,
         error: 'Failed to fetch active Hedera accounts'
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /hedera-accounts/user/{userId}:
+   *   get:
+   *     summary: Get all Hedera accounts for a specific user
+   *     tags: [Hedera Accounts]
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: User ID (UUID)
+   *         example: "123e4567-e89b-12d3-a456-426614174000"
+   *     responses:
+   *       200:
+   *         description: Successfully retrieved user's Hedera accounts
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/HederaAccount'
+   *                 message:
+   *                   type: string
+   *                   example: "Found 2 Hedera accounts for user"
+   *       400:
+   *         description: Invalid user ID format
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *             examples:
+   *               invalidUserId:
+   *                 summary: Invalid UUID format
+   *                 value:
+   *                   success: false
+   *                   error: "Invalid user ID format"
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  private async getAccountsByUserId(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId } = req.params;
+      
+      if (!userId) {
+        res.status(400).json({
+          success: false,
+          error: 'User ID is required'
+        });
+        return;
+      }
+      
+      // Basic UUID validation
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(userId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid user ID format'
+        });
+        return;
+      }
+
+      logger.debug('GET /hedera-accounts/user/:userId - Fetching accounts for user', { userId });
+      
+      const accounts = await this.hederaAccountService.getAccountsByUserId(userId);
+      
+      res.json({
+        success: true,
+        data: accounts,
+        message: `Found ${accounts.length} Hedera accounts for user`
+      });
+    } catch (error) {
+      logger.error('GET /hedera-accounts/user/:userId failed', { userId: req.params.userId, error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch user accounts'
       });
     }
   }

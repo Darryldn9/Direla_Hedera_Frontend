@@ -66,6 +66,19 @@ export interface HederaTransactionResult {
   message?: string;
 }
 
+export interface TransactionHistoryItem {
+  amount: number;
+  currency: string;
+  gasFee: number;
+  time: number;
+  to: string;
+  from: string;
+  fromAlias: string;
+  toAlias: string;
+  transactionId: string;
+  type: 'SEND' | 'RECEIVE';
+}
+
 // API Response types
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -141,6 +154,7 @@ export interface HederaService {
   createAccount(initialBalance: number, alias?: string): Promise<{ accountId: string; privateKey: string; publicKey: string }>;
   getAccountInfo(accountId: string): Promise<any>;
   processPayment(paymentRequest: PaymentRequest): Promise<HederaTransactionResult>;
+  getTransactionHistory(accountId: string, limit?: number): Promise<TransactionHistoryItem[]>;
 }
 
 export interface ExternalApiService {

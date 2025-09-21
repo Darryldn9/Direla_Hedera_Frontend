@@ -15,6 +15,7 @@ export class HederaRoutes {
   private setupRoutes(): void {
     this.router.post('/transfer', this.transferHbar.bind(this));
     this.router.post('/payment', this.processPayment.bind(this));
+    this.router.get('/transaction-history/:accountId', this.getTransactionHistory.bind(this));
   }
 
 
@@ -220,6 +221,135 @@ export class HederaRoutes {
       res.status(500).json({
         success: false,
         error: 'Failed to process payment'
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /hedera/transaction-history/{accountId}:
+   *   get:
+   *     summary: Get transaction history for a Hedera account
+   *     tags: [Hedera]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The Hedera account ID
+   *       - in: query
+   *         name: limit
+   *         required: false
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *         description: Maximum number of transactions to return
+   *     responses:
+   *       200:
+   *         description: Transaction history retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       amount:
+   *                         type: number
+   *                         example: 10.5
+   *                       currency:
+   *                         type: string
+   *                         example: "HBAR"
+   *                       gasFee:
+   *                         type: number
+   *                         example: 0.001
+   *                       time:
+   *                         type: string
+   *                         format: date-time
+   *                         example: "2024-01-15T10:30:00.000Z"
+   *                       to:
+   *                         type: string
+   *                         example: "0.0.123456"
+   *                       from:
+   *                         type: string
+   *                         example: "0.0.789012"
+   *                       transactionId:
+   *                         type: string
+   *                         example: "0.0.123456@1234567890.123456789"
+   *                       type:
+   *                         type: string
+   *                         enum: [SEND, RECEIVE]
+   *                         example: "RECEIVE"
+   *                 message:
+   *                   type: string
+   *                   example: "Transaction history retrieved successfully"
+   *       400:
+   *         description: Bad request - invalid account ID or account not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  private async getTransactionHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const { accountId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      // Validate account ID format
+      if (!accountId || !accountId.match(/^\d+\.\d+\.\d+$/)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid account ID format. Expected format: 0.0.123456'
+        });
+        return;
+      }
+
+      // Validate limit
+      if (limit < 1 || limit > 1000) {
+        res.status(400).json({
+          success: false,
+          error: 'Limit must be between 1 and 1000'
+        });
+        return;
+      }
+
+      logger.info('GET /hedera/transaction-history - Getting transaction history', { 
+        accountId, 
+        limit 
+      });
+      
+      const transactions = await this.hederaService.getTransactionHistory(accountId, limit);
+      
+      res.json({
+        success: true,
+        data: transactions,
+        message: 'Transaction history retrieved successfully'
+      });
+    } catch (error) {
+      logger.error('GET /hedera/transaction-history failed', { 
+        error, 
+        accountId: req.params.accountId,
+        limit: req.query.limit 
+      });
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get transaction history';
+      
+      res.status(500).json({
+        success: false,
+        error: errorMessage
       });
     }
   }

@@ -97,6 +97,20 @@ export interface TransactionResponse {
   message?: string;
 }
 
+// Transaction History Types
+export interface TransactionHistoryItem {
+  amount: number;
+  currency: string;
+  gasFee: number;
+  time: number;
+  to: string;
+  from: string;
+  fromAlias: string;
+  toAlias: string;
+  transactionId: string;
+  type: 'SEND' | 'RECEIVE';
+}
+
 // Transaction with DID Types
 export interface ProcessPaymentWithDIDRequest {
   fromAccountId: string;

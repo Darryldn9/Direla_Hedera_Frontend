@@ -9,6 +9,7 @@ import {
   TransferRequest,
   PaymentRequest,
   TransactionResponse,
+  TransactionHistoryItem,
   ApiResponse 
 } from '../../types/api';
 
@@ -100,16 +101,7 @@ export class HederaService extends BaseApiService {
    * Get accounts for a specific user
    */
   async getUserAccounts(userId: string): Promise<ApiResponse<HederaAccount[]>> {
-    const response = await this.getAllAccounts();
-    if (response.success && response.data) {
-      const userAccounts = response.data.filter(account => account.user_id === userId);
-      return {
-        success: true,
-        data: userAccounts,
-        message: `Found ${userAccounts.length} accounts for user`
-      };
-    }
-    return response;
+    return this.get<HederaAccount[]>(API_ENDPOINTS.HEDERA_ACCOUNTS_BY_USER(userId));
   }
 
   /**
@@ -148,14 +140,10 @@ export class HederaService extends BaseApiService {
   }
 
   /**
-   * Get transaction history (placeholder for future implementation)
+   * Get transaction history for a Hedera account
    */
-  async getTransactionHistory(accountId: string): Promise<ApiResponse<any[]>> {
-    // TODO: Implement transaction history endpoint
-    return {
-      success: true,
-      data: [],
-      message: 'Transaction history not yet implemented'
-    };
+  async getTransactionHistory(accountId: string, limit?: number): Promise<ApiResponse<TransactionHistoryItem[]>> {
+    const queryParams = limit ? `?limit=${limit}` : '';
+    return this.get<TransactionHistoryItem[]>(API_ENDPOINTS.HEDERA_TRANSACTION_HISTORY(accountId) + queryParams);
   }
 }

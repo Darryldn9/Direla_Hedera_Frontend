@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AccountProvider } from './AccountContext';
 
 export type AppMode = 'consumer' | 'business';
 
@@ -52,7 +53,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{ mode, setMode, isLoading }}>
-      {children}
+      <AccountProvider>
+        {children}
+      </AccountProvider>
     </AppContext.Provider>
   );
 }

@@ -14,6 +14,12 @@ export const config = {
     network: (process.env.HEDERA_NETWORK as 'testnet' | 'mainnet') || 'testnet'
   } as HederaConfig,
   
+  mirrorNode: {
+    testnet: 'https://testnet.mirrornode.hedera.com',
+    mainnet: 'https://mainnet.mirrornode.hedera.com',
+    previewnet: 'https://previewnet.mirrornode.hedera.com'
+  },
+  
   did: {
     hcsTopicId: process.env.HCS_TOPIC_ID || '' // Optional: if not provided, will create a new topic
   },

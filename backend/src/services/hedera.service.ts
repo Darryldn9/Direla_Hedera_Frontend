@@ -3,7 +3,8 @@ import {
   HederaService, 
   HederaTransactionResult,
   PaymentRequest,
-  HederaAccountService
+  HederaAccountService,
+  TransactionHistoryItem
 } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -183,6 +184,54 @@ export class HederaServiceImpl implements HederaService {
         status: 'FAILED',
         message: error instanceof Error ? error.message : 'Unknown error'
       };
+    }
+  }
+
+  async getTransactionHistory(accountId: string, limit: number = 50): Promise<TransactionHistoryItem[]> {
+    try {
+      logger.info('Getting transaction history', { accountId, limit });
+
+      // Validate account exists in our database
+      const account = await this.hederaAccountService.getAccountByAccountId(accountId);
+      if (!account) {
+        throw new Error(`Account ${accountId} not found in database`);
+      }
+
+      if (!account.is_active) {
+        throw new Error(`Account ${accountId} is not active`);
+      }
+
+      // Get transaction history from infrastructure layer
+      const transactions = await this.hederaInfra.getTransactionHistory(accountId, limit);
+
+      // Enrich transactions with aliases
+      const enrichedTransactions = await Promise.all(
+        transactions.map(async (transaction) => {
+          // Look up aliases for from and to accounts
+          const fromAccount = await this.hederaAccountService.getAccountByAccountId(transaction.from);
+          const toAccount = await this.hederaAccountService.getAccountByAccountId(transaction.to);
+
+          return {
+            ...transaction,
+            fromAlias: fromAccount?.alias || transaction.from,
+            toAlias: toAccount?.alias || transaction.to
+          };
+        })
+      );
+
+      logger.info('Transaction history retrieved successfully', { 
+        accountId, 
+        transactionCount: enrichedTransactions.length 
+      });
+
+      return enrichedTransactions;
+    } catch (error) {
+      logger.error('Failed to get transaction history', { 
+        accountId, 
+        limit, 
+        error 
+      });
+      throw error;
     }
   }
 }

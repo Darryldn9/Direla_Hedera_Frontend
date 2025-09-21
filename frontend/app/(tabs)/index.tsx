@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { CreditCard, Plus, Eye, EyeOff, ArrowUpRight, ArrowDownLeft, ShoppingCart, Users, Minus, Zap } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppMode } from '../../contexts/AppContext';
-import VirtualCard from '../../components/VirtualCard';
-import AppleWalletModal from '../../components/AppleWalletModal';
-import { useUserManagement } from '../../hooks/useAuth';
+import { useAppMode } from '@/contexts/AppContext';
+import VirtualCard from '@/components/VirtualCard';
+import AppleWalletModal from '@/components/AppleWalletModal';
+import { useUserManagement } from '@/hooks/useAuth';
+import { useAccount } from '@/contexts/AccountContext';
+import { useTransactionHistory } from '@/hooks/useTransactionHistory';
+import moment from 'moment';
 
 interface Transaction {
   id: string;
@@ -24,7 +27,38 @@ export default function WalletScreen() {
 
   const { currentUser } = useUserManagement();
 
-  const balance = currentUser?.balance ?? 0;
+  const { selectedAccount } = useAccount();
+
+  // Fetch transaction history for the selected account
+  const { 
+    transactions: hederaTransactions, 
+    isLoading: isLoadingTransactions, 
+    error: transactionError,
+    refresh: refreshTransactions 
+  } = useTransactionHistory(selectedAccount?.account_id, 10);
+
+  const balance = selectedAccount?.balance ?? 0;
+
+  // Console log the transaction history when it changes
+  useEffect(() => {
+    if (hederaTransactions.length > 0) {
+      console.log('=== HEDERA TRANSACTION HISTORY ===');
+      console.log('Account ID:', selectedAccount?.account_id);
+      console.log('Number of transactions:', hederaTransactions.length);
+      console.log('Transactions:', hederaTransactions);
+      console.log('================================');
+    }
+  }, [hederaTransactions, selectedAccount?.account_id]);
+
+  // Console log loading and error states
+  useEffect(() => {
+    if (isLoadingTransactions) {
+      console.log('Loading transaction history...');
+    }
+    if (transactionError) {
+      console.error('Transaction history error:', transactionError);
+    }
+  }, [isLoadingTransactions, transactionError]);
 
   // Mode-aware data
   const businessName = "Mama Thandi's Spaza Shop";
@@ -165,37 +199,73 @@ export default function WalletScreen() {
         <View style={styles.transactionsSection}>
           <View style={styles.transactionsHeader}>
             <Text style={styles.sectionTitle}>Recent Transactions</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View All</Text>
+            <TouchableOpacity onPress={refreshTransactions}>
+              <Text style={styles.viewAllText}>
+                {isLoadingTransactions ? 'Loading...' : 'Refresh'}
+              </Text>
             </TouchableOpacity>
           </View>
           
-          {recentTransactions.map((transaction) => (
-            <TouchableOpacity key={transaction.id} style={styles.transactionItem}>
-              <View style={styles.transactionIcon}>
-                {getTransactionIcon(transaction.type)}
-              </View>
-              <View style={styles.transactionDetails}>
-                <Text style={styles.transactionDescription}>{transaction.description}</Text>
-                <Text style={styles.transactionTime}>{transaction.timestamp}</Text>
-              </View>
-              <View style={styles.transactionAmount}>
-                <Text style={[
-                  styles.transactionAmountText,
-                  { 
-                    color: transaction.type === 'sent' ? '#E74C3C' : '#0C7C59' 
-                  }
-                ]}>
-                  {transaction.type === 'sent' ? '-' : '+'}R {transaction.amount.toFixed(2)}
-                </Text>
-                <View style={[
-                  styles.statusDot,
-                  { backgroundColor: transaction.status === 'completed' ? '#0C7C59' : '#F1C40F' }
-                ]} />
-              </View>
-            </TouchableOpacity>
-          ))}
+          {isLoadingTransactions ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading transactions...</Text>
+            </View>
+          ) : hederaTransactions.length > 0 ? (
+            hederaTransactions.map((transaction) => (
+              <TouchableOpacity key={transaction.transactionId} style={styles.transactionItem}>
+                <View style={styles.transactionIcon}>
+                  {getTransactionIcon(transaction.type === 'SEND' ? 'sent' : 'received')}
+                </View>
+                <View style={styles.transactionDetails}>
+                  <Text style={styles.transactionDescription}>
+                    {transaction.type === 'SEND' 
+                      ? `Sent to ${transaction.toAlias}` 
+                      : `Received from ${transaction.fromAlias}`
+                    }
+                  </Text>
+                  <Text style={styles.transactionTime}>
+                    {moment(transaction.time).fromNow()}
+                  </Text>
+                </View>
+                <View style={styles.transactionAmount}>
+                  <Text style={[
+                    styles.transactionAmountText,
+                    { 
+                      color: transaction.type === 'SEND' ? '#E74C3C' : '#0C7C59' 
+                    }
+                  ]}>
+                    {transaction.type === 'SEND' ? '-' : '+'}{transaction.amount.toFixed(2)} {transaction.currency}
+                  </Text>
+                  <View style={[
+                    styles.statusDot,
+                    { backgroundColor: '#0C7C59' } // All transactions are completed
+                  ]} />
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No transactions yet</Text>
+              <Text style={styles.emptySubtext}>Your transaction history will appear here</Text>
+            </View>
+          )}
         </View>
+
+        {/* Debug Section - Hedera Transaction History */}
+        {hederaTransactions.length > 0 && (
+          <View style={styles.debugSection}>
+            <Text style={styles.debugTitle}>🔍 Hedera Transaction History (Debug)</Text>
+            <Text style={styles.debugText}>
+              Account: {selectedAccount?.account_id}
+            </Text>
+            <Text style={styles.debugText}>
+              Transactions: {hederaTransactions.length}
+            </Text>
+            {transactionError && (
+              <Text style={styles.debugError}>Error: {transactionError}</Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.features}>
           <View style={styles.featureItem}>
@@ -429,5 +499,55 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+  },
+  debugSection: {
+    backgroundColor: '#FFF3CD',
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFC107',
+  },
+  debugTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 14,
+    color: '#856404',
+    marginBottom: 4,
+  },
+  debugError: {
+    fontSize: 14,
+    color: '#DC3545',
+    marginTop: 4,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#C7C7CC',
   },
 });
