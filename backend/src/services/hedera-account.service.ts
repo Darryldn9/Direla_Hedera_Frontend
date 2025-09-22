@@ -125,7 +125,7 @@ export class HederaAccountServiceImpl implements HederaAccountService {
         throw new Error(`Failed to get Hedera account: ${error.message}`);
       }
 
-      logger.debug('Hedera account found', { accountId: id });
+      // logger.debug('Hedera account found', { accountId: id });
       return account;
     } catch (error) {
       logger.error('Failed to get Hedera account by ID', { accountId: id, error });
@@ -154,7 +154,7 @@ export class HederaAccountServiceImpl implements HederaAccountService {
         throw new Error(`Failed to get Hedera account: ${error.message}`);
       }
 
-      logger.debug('Hedera account found', { accountId });
+      // logger.debug('Hedera account found', { accountId });
       return account;
     } catch (error) {
       logger.error('Failed to get Hedera account by account ID', { accountId, error });

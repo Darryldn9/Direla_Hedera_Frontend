@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { HederaService } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { isValidHederaAccountId } from '../utils/hedera-validation.js';
 
 export class HederaRoutes {
   private router: Router;
@@ -316,11 +317,11 @@ export class HederaRoutes {
       const { accountId } = req.params;
       const limit = parseInt(req.query.limit as string) || 50;
       
-      // Validate account ID format
-      if (!accountId || !accountId.match(/^\d+\.\d+\.\d+$/)) {
+      // Validate account ID format using shared validator (supports EVM 0x... too)
+      if (!accountId || !isValidHederaAccountId(accountId)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid account ID format. Expected format: 0.0.123456'
+          error: 'Invalid Hedera account ID format'
         });
         return;
       }

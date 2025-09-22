@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { HederaAccountService } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { isValidHederaAccountId } from '../utils/hedera-validation.js';
 
 export class HederaAccountRoutes {
   private router: Router;
@@ -700,6 +701,14 @@ export class HederaAccountRoutes {
         return;
       }
       
+      if (!isValidHederaAccountId(accountId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid Hedera account ID format'
+        });
+        return;
+      }
+      
       logger.debug('GET /hedera-accounts/balance/:accountId - Getting balance', { accountId });
       
       const balance = await this.hederaAccountService.getAccountBalance(accountId);
@@ -775,6 +784,14 @@ export class HederaAccountRoutes {
         res.status(400).json({
           success: false,
           error: 'Account ID is required'
+        });
+        return;
+      }
+      
+      if (!isValidHederaAccountId(accountId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid Hedera account ID format'
         });
         return;
       }

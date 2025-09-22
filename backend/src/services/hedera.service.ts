@@ -143,8 +143,13 @@ export class HederaServiceImpl implements HederaService {
         throw new Error(`Insufficient balance. Available: ${fromBalance} HBAR, Required: ${amount} HBAR`);
       }
 
-      // Execute the transfer
-      const result = await this.hederaInfra.transferHbar(fromAccountId, toAccountId, amount);
+      // Execute the transfer, signed by the sender's key to avoid INVALID_SIGNATURE
+      const result = await (this.hederaInfra as any).transferHbarFromAccount(
+        fromAccountId,
+        (fromAccount as any).private_key,
+        toAccountId,
+        amount
+      );
 
       if (result.status === 'SUCCESS') {
         // Update balances in our database

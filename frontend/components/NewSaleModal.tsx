@@ -22,6 +22,7 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import { useAccount } from '../contexts/AccountContext';
 import { useUserManagement } from '../hooks/useAuth';
+import { usePaymentPolling } from '../hooks/usePaymentPolling';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -39,9 +40,26 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
+  const [autoPollingStarted, setAutoPollingStarted] = useState(false);
+  const [qrValue, setQrValue] = useState('');
+  const [showCongratsDialog, setShowCongratsDialog] = useState(false);
+  const [congratsText, setCongratsText] = useState<{ currency: string; amount: string; from: string; completedAt: string }>({ currency: 'R', amount: '0.00', from: 'customer', completedAt: '' });
   
   const { selectedAccount } = useAccount();
   const { currentUser } = useUserManagement();
+
+  const poller = usePaymentPolling(
+    selectedAccount && amount
+      ? {
+          toAccountId: selectedAccount.account_id,
+          amountHBAR: parseFloat(amount) / 100,
+          expectedMemoContains: selectedAccount.alias || selectedAccount.account_id,
+          timeoutMs: 60000,
+          intervalMs: 3000,
+          amountTolerance: Math.max(0.00000001, (parseFloat(amount) / 100) * 0.01),
+        }
+      : undefined
+  );
 
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -96,6 +114,40 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
     }
   };
 
+  // Start polling when QR dialog opens with valid inputs
+  React.useEffect(() => {
+    if (showQRDialog && !autoPollingStarted && poller && selectedAccount && amount) {
+      poller.start();
+      setAutoPollingStarted(true);
+    }
+    if (!showQRDialog && autoPollingStarted) {
+      poller.cancel();
+      setAutoPollingStarted(false);
+    }
+  }, [showQRDialog, autoPollingStarted, poller, selectedAccount, amount]);
+
+  // React to polling status changes
+  React.useEffect(() => {
+    if (!poller) return;
+    if (poller.status === 'confirmed') {
+      const saleAmount = parseFloat(amount || '0');
+      if (saleAmount > 0) {
+        onSaleComplete(saleAmount, 'qr');
+      }
+      setShowQRDialog(false);
+      setIsProcessing(false);
+      setAutoPollingStarted(false);
+      // Show congratulations; user will close manually
+      const formattedAmount = formatAmount(amount);
+      const completedAt = new Date().toLocaleString();
+      setCongratsText({ currency: 'R', amount: formattedAmount, from: 'customer', completedAt });
+      setShowCongratsDialog(true);
+    } else if (poller.status === 'timeout') {
+      Alert.alert('Payment timed out', 'No payment detected within 1 minute.');
+      setAutoPollingStarted(false);
+    }
+  }, [poller?.status]);
+
   const handleProcessPayment = async () => {
     if (!selectedMethod) {
       Alert.alert('Payment Method Required', 'Please select a payment method');
@@ -109,13 +161,10 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       setIsProcessing(false);
       const saleAmount = parseFloat(amount);
       onSaleComplete(saleAmount, selectedMethod);
-      onClose();
-      
-      // Show success message
-      Alert.alert(
-        'Sale Complete!', 
-        `R${saleAmount.toFixed(2)} payment processed via ${getMethodName(selectedMethod)}`
-      );
+      const formattedAmount = formatAmount(amount);
+      const completedAt = new Date().toLocaleString();
+      setCongratsText({ currency: 'R', amount: formattedAmount, from: 'customer', completedAt });
+      setShowCongratsDialog(true);
     }, 2000);
   };
 
@@ -140,21 +189,23 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
     setAmount('');
   };
 
-  const generateQRCodeData = () => {
-    if (!selectedAccount || !amount) return '';
-    
-    const qrData = {
-      toAccountId: selectedAccount.account_id, // Backend expects 'toAccountId'
-      amount: parseFloat(amount) / 100, // Convert from cents to main unit
-      currency: 'HBAR', // Backend processes HBAR, not ZAR
-      accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
-      memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`, // Optional memo for transaction
-      merchant_user_id: currentUser?.user_id, // For DID logging
-      timestamp: new Date().toISOString()
-    };
-    
-    return JSON.stringify(qrData);
-  };
+  // Generate a stable QR payload once when dialog opens
+  React.useEffect(() => {
+    if (showQRDialog && selectedAccount && amount) {
+      const qrData = {
+        toAccountId: selectedAccount.account_id,
+        amount: parseFloat(amount) / 100,
+        currency: 'HBAR',
+        accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
+        memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`,
+        merchant_user_id: currentUser?.user_id,
+      };
+      setQrValue(JSON.stringify(qrData));
+    }
+    if (!showQRDialog) {
+      setQrValue('');
+    }
+  }, [showQRDialog, selectedAccount, amount, currentUser?.user_id]);
 
   const PaymentMethodButton = ({ 
     method, 
@@ -406,9 +457,9 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
             
             <View style={styles.qrContent}>
               <View style={styles.qrCodeContainer}>
-                {selectedAccount && amount ? (
+                {selectedAccount && amount && qrValue ? (
                   <QRCode
-                    value={generateQRCodeData()}
+                    value={qrValue}
                     size={180}
                     color="#1C1C1E"
                     backgroundColor="#FFFFFF"
@@ -436,18 +487,31 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
               <Text style={styles.qrInstructions}>
                 Customer should scan this QR code with their mobile payment app to complete the transaction.
               </Text>
+              {/* Countdown Timer */}
+              {poller && (
+                <View style={{ marginTop: 12, alignItems: 'center' }}>
+                  <Text style={{ color: '#8E8E93' }}>
+                    Time remaining: {Math.floor((poller.remainingMs || 0) / 1000)}s
+                  </Text>
+                </View>
+              )}
             </View>
             
             <View style={styles.qrActions}>
               <TouchableOpacity
                 style={styles.qrCancelButton}
-                onPress={() => setShowQRDialog(false)}
+                onPress={() => {
+                  poller?.cancel();
+                  setShowQRDialog(false);
+                  setAutoPollingStarted(false);
+                }}
               >
                 <Text style={styles.qrCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.qrConfirmButton}
                 onPress={() => {
+                  // Manual override still available
                   setShowQRDialog(false);
                   handleProcessPayment();
                 }}
@@ -458,7 +522,84 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
           </View>
         </View>
       </Modal>
+
+      {/* Congratulations Dialog */}
+      <Modal
+        visible={showCongratsDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCongratsDialog(false)}
+      >
+        <View style={styles.congratsOverlay}>
+          <View style={styles.congratsDialog}>
+            <Text style={styles.congratsTitle}>🎉 Congrats!</Text>
+            <Text style={styles.congratsSubtitle}>You made a new sale!</Text>
+            <Text style={styles.congratsAmount}>{congratsText.currency} {congratsText.amount}</Text>
+            <Text style={styles.congratsDetail}>from {congratsText.from}</Text>
+            <Text style={styles.congratsDetail}>completed {congratsText.completedAt}</Text>
+            <TouchableOpacity
+              style={styles.congratsButton}
+              onPress={() => {
+                setShowCongratsDialog(false);
+                onClose();
+              }}
+            >
+              <Text style={styles.congratsButtonText}>Great!</Text>
+            </TouchableOpacity>
+            <ConfettiRain />
+          </View>
+        </View>
+      </Modal>
     </Modal>
+  );
+}
+
+// Simple confetti rain without external dependencies
+function ConfettiRain() {
+  const pieces = Array.from({ length: 25 }).map((_, idx) => idx);
+  return (
+    <View pointerEvents="none" style={styles.confettiContainer}>
+      {pieces.map((i) => (
+        <ConfettiPiece key={i} index={i} />
+      ))}
+    </View>
+  );
+}
+
+function ConfettiPiece({ index }: { index: number }) {
+  const fall = React.useRef(new Animated.Value(0)).current;
+  const rotate = React.useRef(new Animated.Value(0)).current;
+  const left = Math.random() * 260 + 20; // within dialog width
+  const size = Math.random() * 8 + 6;
+  const duration = 1400 + Math.random() * 900;
+  const delay = Math.random() * 400;
+  const colors = ['#FF6B6B', '#FFD166', '#06D6A0', '#4D96FF', '#9B5DE5'];
+  const bg = colors[index % colors.length];
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fall, { toValue: 1, duration, delay, useNativeDriver: true }),
+      Animated.timing(rotate, { toValue: 1, duration, delay, useNativeDriver: true }),
+    ]).start();
+  }, [fall, rotate, duration, delay]);
+
+  const translateY = fall.interpolate({ inputRange: [0, 1], outputRange: [-20, 220] });
+  const rotateZ = rotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${Math.random() * 720 - 360}deg`] });
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        top: 0,
+        left,
+        width: size,
+        height: size * 0.6,
+        backgroundColor: bg,
+        transform: [{ translateY }, { rotateZ }],
+        borderRadius: 2,
+        opacity: 0.9,
+      }}
+    />
   );
 }
 
@@ -801,5 +942,68 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // Congrats Dialog
+  congratsOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  congratsDialog: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 320,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  congratsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  congratsSubtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  congratsAmount: {
+    marginTop: 12,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0C7C59',
+  },
+  congratsDetail: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  congratsButton: {
+    marginTop: 16,
+    backgroundColor: '#0C7C59',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  congratsButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confettiContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 240,
+    overflow: 'hidden',
   },
 });

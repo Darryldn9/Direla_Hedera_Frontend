@@ -22,13 +22,27 @@ export interface PaymentResult {
 }
 
 export class PaymentService extends BaseApiService {
+  private normalizeAmountHBAR(amount: number): number {
+    const normalized = Math.round(amount * 1e8) / 1e8;
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+      throw new Error('Invalid payment amount');
+    }
+    return normalized;
+  }
+
   /**
    * Process a payment between accounts
    */
   async processPayment(paymentData: PaymentRequest): Promise<ApiResponse<PaymentResult>> {
     try {
+      // Normalize amount to 8 decimal places (HBAR precision)
+      const safePaymentData = {
+        ...paymentData,
+        amount: this.normalizeAmountHBAR(paymentData.amount),
+      };
+
       // Validate payment before processing
-      const validation = await this.validatePayment(paymentData);
+      const validation = await this.validatePayment(safePaymentData);
       if (!validation.isValid) {
         return {
           success: false,
@@ -41,7 +55,7 @@ export class PaymentService extends BaseApiService {
         };
       }
 
-      const response = await this.post<TransactionResponse>(API_ENDPOINTS.HEDERA_PAYMENT, paymentData);
+      const response = await this.post<TransactionResponse>(API_ENDPOINTS.HEDERA_PAYMENT, safePaymentData);
 
       if (response.success && response.data) {
         return {

@@ -18,6 +18,7 @@ import {
 import { HederaConfig, HederaTransactionResult, TransactionHistoryItem } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
+import { assertValidHederaAccountId } from '../utils/hedera-validation.js';
 
 export class HederaInfrastructure {
   private client: Client;
@@ -57,6 +58,7 @@ export class HederaInfrastructure {
 
   async getAccountBalance(accountId: string): Promise<number> {
     try {
+      assertValidHederaAccountId(accountId);
       const query = new AccountBalanceQuery()
         .setAccountId(AccountId.fromString(accountId));
       
@@ -83,9 +85,14 @@ export class HederaInfrastructure {
         throw new Error('Private key does not match the account. Please verify your credentials.');
       }
 
+      const tinybars = Math.round(amount * 100000000);
+      if (!Number.isFinite(tinybars)) {
+        throw new Error('Invalid amount provided');
+      }
+
       const transferTransaction = new TransferTransaction()
-        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-amount * 100000000))
-        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(amount * 100000000));
+        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-tinybars))
+        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(tinybars));
 
       const response = await transferTransaction.execute(this.client);
       const receipt = await response.getReceipt(this.client);
@@ -126,14 +133,84 @@ export class HederaInfrastructure {
     }
   }
 
+  /**
+   * Transfer HBAR using the sender's private key as the payer and signer.
+   * This avoids INVALID_SIGNATURE when the configured operator does not match the sender.
+   */
+  async transferHbarFromAccount(
+    fromAccountId: string,
+    fromPrivateKey: string,
+    toAccountId: string,
+    amount: number
+  ): Promise<HederaTransactionResult> {
+    try {
+      const tinybars = Math.round(amount * 100000000);
+      if (!Number.isFinite(tinybars)) {
+        throw new Error('Invalid amount provided');
+      }
+
+      // Build transaction and set payer to the sender account
+      const transferTransaction = new TransferTransaction()
+        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-tinybars))
+        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(tinybars))
+        .setTransactionId(TransactionId.generate(AccountId.fromString(fromAccountId)));
+
+      // Freeze then sign with the sender's private key
+      const senderPrivateKey = this.validateAndParsePrivateKey(fromPrivateKey);
+      const frozen = await transferTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(senderPrivateKey);
+
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Hbar transfer (sender-signed) successful', {
+          fromAccountId,
+          toAccountId,
+          amount,
+          transactionId: response.transactionId.toString()
+        });
+
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Hbar transfer (sender-signed) failed', {
+          fromAccountId,
+          toAccountId,
+          amount,
+          status: receipt.status
+        });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Transfer failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Hbar transfer (sender-signed) error', { fromAccountId, toAccountId, amount, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   async createAccount(initialBalance: number, alias?: string): Promise<{ accountId: string; privateKey: string; publicKey: string }> {
     try {
       const newAccountPrivateKey = PrivateKey.generateED25519();
       const newAccountPublicKey = newAccountPrivateKey.publicKey;
 
+      const initialTinybars = Math.round(initialBalance * 100000000);
+      if (!Number.isFinite(initialTinybars)) {
+        throw new Error('Invalid initial balance provided');
+      }
+
       const accountCreateTransaction = new AccountCreateTransaction()
         .setKey(newAccountPublicKey)
-        .setInitialBalance(Hbar.fromTinybars(initialBalance * 100000000));
+        .setInitialBalance(Hbar.fromTinybars(initialTinybars));
 
       // Add alias if provided
       if (alias) {
@@ -174,6 +251,7 @@ export class HederaInfrastructure {
 
   async getAccountInfo(accountId: string) {
     try {
+      assertValidHederaAccountId(accountId);
       const query = new AccountInfoQuery()
         .setAccountId(AccountId.fromString(accountId));
       
@@ -327,9 +405,14 @@ export class HederaInfrastructure {
       }
 
       // Create and validate transaction
+      const tinybars = Math.round(amount * 100000000);
+      if (!Number.isFinite(tinybars)) {
+        throw new Error('Invalid amount provided');
+      }
+
       const transferTransaction = new TransferTransaction()
-        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-amount * 100000000))
-        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(amount * 100000000));
+        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-tinybars))
+        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(tinybars));
 
       await this.validateTransaction(transferTransaction);
 
@@ -514,6 +597,7 @@ export class HederaInfrastructure {
    */
   async getTransactionHistory(accountId: string, limit: number = 50): Promise<TransactionHistoryItem[]> {
     try {
+      assertValidHederaAccountId(accountId);
       logger.info('Fetching transaction history from Mirror Node API', { accountId, limit });
 
       // Use appropriate mirror node API based on network configuration
