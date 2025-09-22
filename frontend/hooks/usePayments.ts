@@ -46,7 +46,7 @@ export function usePaymentManager() {
   const makePayment = useCallback(async (paymentData: PaymentRequest) => {
     const result = await payments.processPayment.execute(paymentData);
     
-    console.log("[DEBUG] MAKE PAYMENT RESULT", result);
+    // console.log("[DEBUG] MAKE PAYMENT RESULT", result);
     
     if (result?.success && result.transactionId) {
       // Add to pending payments

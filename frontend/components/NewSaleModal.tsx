@@ -22,7 +22,7 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import { useAccount } from '../contexts/AccountContext';
 import { useUserManagement } from '../hooks/useAuth';
-import { usePaymentPolling } from '../hooks/usePaymentPolling';
+import { usePaymentPollingWithToast } from '../hooks/usePaymentPollingWithToast';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -48,18 +48,22 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
   const { selectedAccount } = useAccount();
   const { currentUser } = useUserManagement();
 
-  const poller = usePaymentPolling(
+  const poller = usePaymentPollingWithToast(
     selectedAccount && amount
       ? {
           toAccountId: selectedAccount.account_id,
           amountHBAR: parseFloat(amount) / 100,
           expectedMemoContains: selectedAccount.alias || selectedAccount.account_id,
           timeoutMs: 60000,
-          intervalMs: 3000,
+          intervalMs: 10000,
           amountTolerance: Math.max(0.00000001, (parseFloat(amount) / 100) * 0.01),
         }
       : undefined
   );
+
+  const pollStart = poller?.start;
+  const pollCancel = poller?.cancel;
+  const pollStatus = poller?.status;
 
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -116,20 +120,20 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
 
   // Start polling when QR dialog opens with valid inputs
   React.useEffect(() => {
-    if (showQRDialog && !autoPollingStarted && poller && selectedAccount && amount) {
-      poller.start();
+    if (showQRDialog && !autoPollingStarted && pollStart && selectedAccount && amount) {
+      pollStart();
       setAutoPollingStarted(true);
     }
     if (!showQRDialog && autoPollingStarted) {
-      poller.cancel();
+      pollCancel?.();
       setAutoPollingStarted(false);
     }
-  }, [showQRDialog, autoPollingStarted, poller, selectedAccount, amount]);
+  }, [showQRDialog, autoPollingStarted, pollStart, pollCancel, selectedAccount, amount]);
 
   // React to polling status changes
   React.useEffect(() => {
     if (!poller) return;
-    if (poller.status === 'confirmed') {
+    if (pollStatus === 'confirmed') {
       const saleAmount = parseFloat(amount || '0');
       if (saleAmount > 0) {
         onSaleComplete(saleAmount, 'qr');
@@ -142,11 +146,11 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       const completedAt = new Date().toLocaleString();
       setCongratsText({ currency: 'R', amount: formattedAmount, from: 'customer', completedAt });
       setShowCongratsDialog(true);
-    } else if (poller.status === 'timeout') {
+    } else if (pollStatus === 'timeout') {
       Alert.alert('Payment timed out', 'No payment detected within 1 minute.');
       setAutoPollingStarted(false);
     }
-  }, [poller?.status]);
+  }, [pollStatus]);
 
   const handleProcessPayment = async () => {
     if (!selectedMethod) {

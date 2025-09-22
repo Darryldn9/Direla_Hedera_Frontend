@@ -14,6 +14,7 @@ import { useAppMode } from '../../contexts/AppContext';
 import { useAccount } from '../../contexts/AccountContext';
 import { useUserManagement } from '../../hooks/useAuth';
 import { usePaymentManager } from '../../hooks/usePayments';
+import { useToast } from '../../hooks/useToast';
 import { ProcessPaymentWithDIDRequest } from '../../types/api';
 import {
   QrCode,
@@ -66,6 +67,7 @@ export default function PayScreen() {
   const { selectedAccount } = useAccount();
   const { currentUser } = useUserManagement();
   const { makePayment } = usePaymentManager();
+  const { showSuccess, showError, showInfo } = useToast();
 
   // Mode-aware data
   const businessName = "Mama Thandi's Spaza Shop";
@@ -103,6 +105,13 @@ export default function PayScreen() {
     setRecipient(paymentData.toAccountId);
     setIsProcessingPayment(true);
     
+    // Show processing toast
+    showInfo(
+      'Processing Payment',
+      `Sending ${paymentData.amount.toFixed(2)} ${paymentData.currency} to ${paymentData.accountAlias || paymentData.toAccountId}`,
+      0 // No auto-dismiss for processing toast
+    );
+    
     try {
       // Prepare payment request for backend
       const paymentRequest: ProcessPaymentWithDIDRequest = {
@@ -116,10 +125,17 @@ export default function PayScreen() {
       // Process the payment
       const result = await makePayment(paymentRequest);
 
-      console.log("[DEBUG] PAYMENT RESULT", result);
+      // console.log("[DEBUG] PAYMENT RESULT", result);
       
       if (result?.success && result.transactionId) {
-        // Payment successful
+        // Payment successful - show success toast
+        showSuccess(
+          'Payment Successful!',
+          `${paymentData.amount.toFixed(2)} ${paymentData.currency} sent successfully\nTransaction ID: ${result.transactionId}`,
+          5000
+        );
+        
+        // Also show the detailed alert
         Alert.alert(
           'Payment Successful!',
           `${paymentData.amount.toFixed(2)} ${paymentData.currency} sent to ${paymentData.accountAlias || paymentData.toAccountId}\n\nTransaction ID: ${result.transactionId}\n\nTransaction processed on Hedera Hashgraph for instant settlement.`,
@@ -131,7 +147,14 @@ export default function PayScreen() {
           ]
         );
       } else {
-        // Payment failed
+        // Payment failed - show error toast
+        showError(
+          'Payment Failed',
+          result?.error || 'Unknown error occurred while processing payment.',
+          5000
+        );
+        
+        // Also show the detailed alert
         Alert.alert(
           'Payment Failed',
           result?.error || 'Unknown error occurred while processing payment.',
@@ -140,6 +163,15 @@ export default function PayScreen() {
       }
     } catch (error) {
       console.error('Payment processing error:', error);
+      
+      // Show error toast
+      showError(
+        'Payment Error',
+        'An error occurred while processing the payment. Please try again.',
+        5000
+      );
+      
+      // Also show the detailed alert
       Alert.alert(
         'Payment Error',
         'An error occurred while processing the payment. Please try again.',
@@ -179,6 +211,13 @@ export default function PayScreen() {
 
     setIsProcessingPayment(true);
 
+    // Show processing toast
+    showInfo(
+      'Processing Payment',
+      `Sending payment via ${paymentMethod.toUpperCase()}`,
+      0 // No auto-dismiss for processing toast
+    );
+
     try {
       // For now, we'll treat other payment methods as transfers to the recipient
       // In a real app, you'd have different logic for each payment method
@@ -193,6 +232,14 @@ export default function PayScreen() {
       const result = await makePayment(paymentRequest);
       
       if (result?.success && result.transactionId) {
+        // Payment successful - show success toast
+        showSuccess(
+          'Payment Successful!',
+          `Payment sent via ${paymentMethod.toUpperCase()}\nTransaction ID: ${result.transactionId}`,
+          5000
+        );
+        
+        // Also show the detailed alert
         Alert.alert(
           'Payment Successful!',
           `Payment sent via ${paymentMethod.toUpperCase()}\n\nTransaction ID: ${result.transactionId}\n\nTransaction processed on Hedera Hashgraph for instant settlement.`,
@@ -204,6 +251,14 @@ export default function PayScreen() {
           ]
         );
       } else {
+        // Payment failed - show error toast
+        showError(
+          'Payment Failed',
+          result?.error || 'Unknown error occurred while processing payment.',
+          5000
+        );
+        
+        // Also show the detailed alert
         Alert.alert(
           'Payment Failed',
           result?.error || 'Unknown error occurred while processing payment.',
@@ -212,6 +267,15 @@ export default function PayScreen() {
       }
     } catch (error) {
       console.error('Payment processing error:', error);
+      
+      // Show error toast
+      showError(
+        'Payment Error',
+        'An error occurred while processing the payment. Please try again.',
+        5000
+      );
+      
+      // Also show the detailed alert
       Alert.alert(
         'Payment Error',
         'An error occurred while processing the payment. Please try again.',

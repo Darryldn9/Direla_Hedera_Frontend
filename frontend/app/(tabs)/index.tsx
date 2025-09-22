@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { CreditCard, Plus, Eye, EyeOff, ArrowUpRight, ArrowDownLeft, ShoppingCart, Users, Minus, Zap } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +19,7 @@ interface Transaction {
   status: 'completed' | 'pending';
 }
 
-export default function WalletScreen() {
+function WalletScreen() {
   const [showBalance, setShowBalance] = useState(true);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const { mode } = useAppMode();
@@ -28,6 +28,7 @@ export default function WalletScreen() {
   const { currentUser } = useUserManagement();
 
   const { selectedAccount } = useAccount();
+  const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
 
   // Fetch transaction history for the selected account
   const { 
@@ -35,21 +36,10 @@ export default function WalletScreen() {
     isLoading: isLoadingTransactions, 
     error: transactionError,
     refresh: refreshTransactions 
-  } = useTransactionHistory(selectedAccount?.account_id, 10);
+  } = useTransactionHistory(accountId, 10);
 
   const balance = selectedAccount?.balance ?? 0;
-
-  // Console log the transaction history when it changes
-  useEffect(() => {
-    if (hederaTransactions.length > 0) {
-      console.log('=== HEDERA TRANSACTION HISTORY ===');
-      console.log('Account ID:', selectedAccount?.account_id);
-      console.log('Number of transactions:', hederaTransactions.length);
-      console.log('Transactions:', hederaTransactions);
-      console.log('================================');
-    }
-  }, [hederaTransactions, selectedAccount?.account_id]);
-
+  
   // Console log loading and error states
   useEffect(() => {
     if (isLoadingTransactions) {
@@ -292,6 +282,8 @@ export default function WalletScreen() {
     </SafeAreaView>
   );
 }
+
+export default React.memo(WalletScreen);
 
 const styles = StyleSheet.create({
   container: {

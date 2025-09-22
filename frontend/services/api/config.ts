@@ -7,15 +7,17 @@ export const defaultApiConfig: ApiConfig = {
   retryAttempts: 3,
 };
 
+const MY_IP = "192.168.0.100";
+
 // Environment-based configuration
 export const getApiConfig = (): ApiConfig => {
   // In production, you might want to use different URLs
   const isDevelopment = __DEV__;
-  
+
   return {
     ...defaultApiConfig,
     baseUrl: isDevelopment 
-      ? 'http://196.47.225.163:3000/api' 
+      ? `http://${MY_IP}:3000/api` 
       : 'https://your-production-api.com/api',
   };
 };
