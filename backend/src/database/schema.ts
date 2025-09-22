@@ -1,7 +1,9 @@
 // Database table names
 export const TABLES = {
   USERS: 'users',
-  HEDERA_ACCOUNTS: 'hedera_accounts'
+  HEDERA_ACCOUNTS: 'hedera_accounts',
+  CACHED_TRANSACTIONS: 'cached_transactions',
+  TRANSACTION_CACHE_METADATA: 'transaction_cache_metadata'
 } as const;
 
 // User table structure
@@ -42,6 +44,70 @@ export interface NewHederaAccount {
   balance?: number;
   is_active?: boolean;
   user_id: string;
+}
+
+// Cached Transaction table structure
+export interface CachedTransaction {
+  id: number;
+  account_id: string;
+  transaction_id: string;
+  amount: number;
+  currency: string;
+  gas_fee: number;
+  transaction_time: number;
+  to_account: string;
+  from_account: string;
+  from_alias: string | null;
+  to_alias: string | null;
+  transaction_type: 'SEND' | 'RECEIVE';
+  period_type: 'daily' | 'weekly' | 'monthly' | 'all';
+  period_start: number;
+  period_end: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewCachedTransaction {
+  account_id: string;
+  transaction_id: string;
+  amount: number;
+  currency: string;
+  gas_fee: number;
+  transaction_time: number;
+  to_account: string;
+  from_account: string;
+  from_alias?: string | null;
+  to_alias?: string | null;
+  transaction_type: 'SEND' | 'RECEIVE';
+  period_type: 'daily' | 'weekly' | 'monthly' | 'all';
+  period_start: number;
+  period_end: number;
+}
+
+// Transaction Cache Metadata table structure
+export interface TransactionCacheMetadata {
+  id: number;
+  account_id: string;
+  period_type: 'daily' | 'weekly' | 'monthly' | 'all';
+  period_start: number;
+  period_end: number;
+  last_updated: string;
+  transaction_count: number;
+  total_amount: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewTransactionCacheMetadata {
+  account_id: string;
+  period_type: 'daily' | 'weekly' | 'monthly' | 'all';
+  period_start: number;
+  period_end: number;
+  last_updated: string;
+  transaction_count: number;
+  total_amount: number;
+  is_active?: boolean;
 }
 
 // Database query types

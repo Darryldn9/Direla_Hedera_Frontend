@@ -50,6 +50,12 @@ export const API_ENDPOINTS = {
   HEDERA_PAYMENT: '/hedera/payment',
   HEDERA_TRANSACTION_HISTORY: (accountId: string) => `/hedera/transaction-history/${accountId}`,
   
+  // Cached Transactions
+  CACHED_TRANSACTIONS: (accountId: string, periodType: string) => `/cached-transactions/${accountId}/${periodType}`,
+  CACHED_TRANSACTIONS_REVENUE: (accountId: string, periodType: string) => `/cached-transactions/${accountId}/revenue/${periodType}`,
+  CACHED_TRANSACTIONS_REFRESH: (accountId: string) => `/cached-transactions/${accountId}/refresh`,
+  CACHED_TRANSACTIONS_STATUS: (accountId: string) => `/cached-transactions/${accountId}/status`,
+  
   // Metrics
   METRICS_DAILY_REVENUE: (accountId: string) => `/metrics/daily-revenue/${accountId}`,
   METRICS_SUMMARY: (accountId: string, period: 'day' | 'week' | 'month') => `/metrics/summary/${accountId}?period=${period}`,

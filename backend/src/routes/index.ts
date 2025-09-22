@@ -3,6 +3,7 @@ import { UserRoutes } from './user.routes.js';
 import { HederaRoutes } from './hedera.routes.js';
 import { HederaAccountRoutes } from './hedera-account.routes.js';
 import { AuthRoutes } from './auth.routes.js';
+import { CachedTransactionRoutes } from './cached-transaction.routes.js';
 import diagnosticsRoutes from './diagnostics.routes.js';
 import { UserService, HederaService, HederaAccountService } from '../types/index.js';
 import { AuthService } from '../services/auth.service.js';
@@ -14,6 +15,7 @@ export class Routes {
   private hederaRoutes: HederaRoutes;
   private hederaAccountRoutes: HederaAccountRoutes;
   private authRoutes: AuthRoutes;
+  private cachedTransactionRoutes: CachedTransactionRoutes;
   private metricsRoutes: MetricsRoutes;
 
   constructor(userService: UserService, hederaService: HederaService, hederaAccountService: HederaAccountService) {
@@ -22,6 +24,7 @@ export class Routes {
     this.hederaRoutes = new HederaRoutes(hederaService);
     this.hederaAccountRoutes = new HederaAccountRoutes(hederaAccountService);
     this.authRoutes = new AuthRoutes(new AuthService());
+    this.cachedTransactionRoutes = new CachedTransactionRoutes(hederaService);
     this.metricsRoutes = new MetricsRoutes(hederaService, hederaAccountService);
     this.setupRoutes();
   }
@@ -66,6 +69,7 @@ export class Routes {
     this.router.use('/users', this.userRoutes.getRouter());
     this.router.use('/hedera', this.hederaRoutes.getRouter());
     this.router.use('/hedera-accounts', this.hederaAccountRoutes.getRouter());
+    this.router.use('/cached-transactions', this.cachedTransactionRoutes.getRouter());
     this.router.use('/metrics', this.metricsRoutes.getRouter());
     this.router.use('/diagnostics', diagnosticsRoutes);
 
