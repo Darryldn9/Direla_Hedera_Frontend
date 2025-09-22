@@ -31,6 +31,11 @@ export const config = {
   externalApi: {
     baseUrl: process.env.EXTERNAL_API_URL || 'https://api.example.com',
     apiKey: process.env.EXTERNAL_API_KEY || 'demo-key'
+  },
+
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    ttlSeconds: parseInt(process.env.REDIS_TTL_SECONDS || '30')
   }
 };
 

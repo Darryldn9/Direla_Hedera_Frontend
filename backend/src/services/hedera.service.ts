@@ -7,6 +7,7 @@ import {
   TransactionHistoryItem
 } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { cacheGet, cacheSet, cacheKeys, cacheDel } from '../utils/redis.js';
 
 export class HederaServiceImpl implements HederaService {
   private hederaInfra: HederaInfrastructure;
@@ -72,6 +73,16 @@ export class HederaServiceImpl implements HederaService {
           transactionId: result.transactionId,
           message: result.message
         });
+      }
+
+      // Invalidate caches on success
+      if (result.status === 'SUCCESS') {
+        await Promise.all([
+          cacheDel(cacheKeys.balance(fromAccountId)),
+          cacheDel(cacheKeys.balance(toAccountId)),
+          cacheDel(cacheKeys.txHistory(fromAccountId)),
+          cacheDel(cacheKeys.txHistory(toAccountId))
+        ]);
       }
 
       return result;
@@ -159,6 +170,14 @@ export class HederaServiceImpl implements HederaService {
         await this.hederaAccountService.updateAccountBalance(fromAccountId, newFromBalance);
         await this.hederaAccountService.updateAccountBalance(toAccountId, newToBalance);
 
+        // Invalidate caches for balances and transactions
+        await Promise.all([
+          cacheDel(cacheKeys.balance(fromAccountId)),
+          cacheDel(cacheKeys.balance(toAccountId)),
+          cacheDel(cacheKeys.txHistory(fromAccountId)),
+          cacheDel(cacheKeys.txHistory(toAccountId))
+        ]);
+
         logger.info('Payment processed successfully', { 
           fromAccountId, 
           toAccountId, 
@@ -206,8 +225,19 @@ export class HederaServiceImpl implements HederaService {
         throw new Error(`Account ${accountId} is not active`);
       }
 
-      // Get transaction history from infrastructure layer
-      const transactions = await this.hederaInfra.getTransactionHistory(accountId, limit);
+      // Try cache first
+      const key = cacheKeys.txHistory(accountId);
+      const cached = await cacheGet<TransactionHistoryItem[]>(key);
+      let transactions: TransactionHistoryItem[] | null = null;
+      if (cached && Array.isArray(cached)) {
+        logger.debug('Transaction history served from cache', { accountId, count: cached.length });
+        transactions = cached;
+      } else {
+        // Get transaction history from infrastructure layer (Mirror Node)
+        transactions = await this.hederaInfra.getTransactionHistory(accountId, limit);
+        // Store in cache
+        await cacheSet<TransactionHistoryItem[]>(key, transactions);
+      }
 
       // Enrich transactions with aliases
       const enrichedTransactions = await Promise.all(

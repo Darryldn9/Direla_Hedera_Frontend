@@ -6,6 +6,7 @@ import { AuthRoutes } from './auth.routes.js';
 import diagnosticsRoutes from './diagnostics.routes.js';
 import { UserService, HederaService, HederaAccountService } from '../types/index.js';
 import { AuthService } from '../services/auth.service.js';
+import { MetricsRoutes } from './metrics.routes.js';
 
 export class Routes {
   private router: Router;
@@ -13,6 +14,7 @@ export class Routes {
   private hederaRoutes: HederaRoutes;
   private hederaAccountRoutes: HederaAccountRoutes;
   private authRoutes: AuthRoutes;
+  private metricsRoutes: MetricsRoutes;
 
   constructor(userService: UserService, hederaService: HederaService, hederaAccountService: HederaAccountService) {
     this.router = Router();
@@ -20,6 +22,7 @@ export class Routes {
     this.hederaRoutes = new HederaRoutes(hederaService);
     this.hederaAccountRoutes = new HederaAccountRoutes(hederaAccountService);
     this.authRoutes = new AuthRoutes(new AuthService());
+    this.metricsRoutes = new MetricsRoutes(hederaService, hederaAccountService);
     this.setupRoutes();
   }
 
@@ -63,6 +66,7 @@ export class Routes {
     this.router.use('/users', this.userRoutes.getRouter());
     this.router.use('/hedera', this.hederaRoutes.getRouter());
     this.router.use('/hedera-accounts', this.hederaAccountRoutes.getRouter());
+    this.router.use('/metrics', this.metricsRoutes.getRouter());
     this.router.use('/diagnostics', diagnosticsRoutes);
 
     // 404 handler

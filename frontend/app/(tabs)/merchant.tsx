@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChartBar as BarChart3, DollarSign, Users, TrendingUp, ShoppingCart, QrCode, Wifi, Download, FileText, Calculator, Bell, Settings } from 'lucide-react-native';
+import { useAccount } from '../../contexts/AccountContext';
+import { useMetrics } from '../../hooks/useMetrics';
+import { useTransactionHistory } from '../../hooks/useTransactionHistory';
 
 interface SalesData {
   period: string;
@@ -29,52 +32,30 @@ interface RecentTransaction {
 export default function MerchantScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [isAcceptingPayments, setIsAcceptingPayments] = useState(true);
-  const [todaysRevenue] = useState(1247.50);
-  const [monthlyRevenue] = useState(18420.75);
-  const [totalCustomers] = useState(89);
+  const { selectedAccount } = useAccount();
+  const accountId = selectedAccount?.account_id || null;
+  const { dailyRevenue, weeklySummary, monthlySummary, series, loading, error, refresh } = useMetrics(accountId);
+  const { transactions } = useTransactionHistory(accountId || undefined, 10);
+
+  const todaysRevenue = dailyRevenue?.revenue ?? 0;
+  const monthlyRevenue = monthlySummary?.revenue ?? 0;
+  const totalCustomers = weeklySummary?.count ?? 0; // placeholder: distinct customers metric not available yet
   const insets = useSafeAreaInsets();
 
   const salesData: SalesData[] = [
-    { period: 'Today', amount: 1247.50, transactions: 23 },
-    { period: 'Yesterday', amount: 1105.25, transactions: 19 },
-    { period: 'This Week', amount: 7834.50, transactions: 134 },
-    { period: 'This Month', amount: 18420.75, transactions: 412 },
+    { period: 'Today', amount: todaysRevenue, transactions: dailyRevenue?.count ?? 0 },
+    { period: 'This Week', amount: weeklySummary?.revenue ?? 0, transactions: weeklySummary?.count ?? 0 },
+    { period: 'This Month', amount: monthlySummary?.revenue ?? 0, transactions: monthlySummary?.count ?? 0 },
   ];
 
-  const recentTransactions: RecentTransaction[] = [
-    {
-      id: '1',
-      customer: 'Customer #001',
-      amount: 85.50,
-      method: 'Tap to Pay',
-      timestamp: '10 minutes ago',
-      status: 'completed',
-    },
-    {
-      id: '2',
-      customer: 'Customer #002',
-      amount: 32.75,
-      method: 'WhatsApp Pay',
-      timestamp: '25 minutes ago',
-      status: 'completed',
-    },
-    {
-      id: '3',
-      customer: 'Customer #003',
-      amount: 156.00,
-      method: 'QR Code',
-      timestamp: '1 hour ago',
-      status: 'pending',
-    },
-    {
-      id: '4',
-      customer: 'Customer #004',
-      amount: 45.25,
-      method: 'Tap to Pay',
-      timestamp: '2 hours ago',
-      status: 'completed',
-    },
-  ];
+  const recentTransactions: RecentTransaction[] = (transactions || []).slice(0, 10).map((t, idx) => ({
+    id: t.transactionId || String(idx),
+    customer: t.fromAlias === (accountId || '') ? t.toAlias : t.fromAlias,
+    amount: t.amount,
+    method: t.type === 'RECEIVE' ? 'Incoming' : 'Outgoing',
+    timestamp: new Date(t.time).toLocaleString(),
+    status: 'completed',
+  }));
 
   const handleTogglePayments = () => {
     setIsAcceptingPayments(!isAcceptingPayments);

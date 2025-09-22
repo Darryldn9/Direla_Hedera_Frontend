@@ -48,6 +48,11 @@ export const API_ENDPOINTS = {
   HEDERA_PAYMENT: '/hedera/payment',
   HEDERA_TRANSACTION_HISTORY: (accountId: string) => `/hedera/transaction-history/${accountId}`,
   
+  // Metrics
+  METRICS_DAILY_REVENUE: (accountId: string) => `/metrics/daily-revenue/${accountId}`,
+  METRICS_SUMMARY: (accountId: string, period: 'day' | 'week' | 'month') => `/metrics/summary/${accountId}?period=${period}`,
+  METRICS_TIMESERIES: (accountId: string, range: '7d' | '30d') => `/metrics/timeseries/${accountId}?range=${range}`,
+  
   // Transactions (with DID logging)
   TRANSACTIONS: '/transactions',
   

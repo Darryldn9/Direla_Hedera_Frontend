@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { HederaInfrastructure } from '../infrastructure/hedera.js';
 import { ExternalApiInfrastructure } from '../infrastructure/external-api.js';
 import { AuthService } from './auth.service.js';
+import { cacheGet, cacheSet, cacheKeys, cacheDel } from '../utils/redis.js';
 
 export class HederaAccountServiceImpl implements HederaAccountService {
   private hederaInfra: HederaInfrastructure;
@@ -343,6 +344,9 @@ export class HederaAccountServiceImpl implements HederaAccountService {
       }
       
       logger.debug('Account balance updated', { accountId, balance });
+
+      // Update/Invalidate cache
+      await cacheSet<number>(cacheKeys.balance(accountId), balance);
     } catch (error) {
       logger.error('Failed to update account balance', { accountId, balance, error });
       throw error;
@@ -351,10 +355,20 @@ export class HederaAccountServiceImpl implements HederaAccountService {
 
   async getAccountBalance(accountId: string): Promise<number> {
     try {
-      logger.debug('Getting account balance from Hedera network', { accountId });
-      
+      // Try cache first
+      const key = cacheKeys.balance(accountId);
+      const cached = await cacheGet<number>(key);
+      if (typeof cached === 'number') {
+        logger.debug('Account balance served from cache', { accountId });
+        return cached;
+      }
+
+      logger.debug('Cache miss. Fetching account balance from Hedera network', { accountId });
       const balance = await this.hederaInfra.getAccountBalance(accountId);
-      
+
+      // Store in cache
+      await cacheSet<number>(key, balance);
+
       logger.info('Account balance retrieved', { accountId, balance });
       return balance;
     } catch (error) {
