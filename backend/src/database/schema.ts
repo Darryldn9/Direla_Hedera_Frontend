@@ -34,6 +34,7 @@ export interface HederaAccount {
   created_at: string;
   updated_at: string;
   user_id: string; // UUID foreign key to users.user_id
+  whatsapp_phone: string | null; // WhatsApp phone number
 }
 
 export interface NewHederaAccount {
@@ -44,6 +45,7 @@ export interface NewHederaAccount {
   balance?: number;
   is_active?: boolean;
   user_id: string;
+  whatsapp_phone?: string | null; // WhatsApp phone number
 }
 
 // Cached Transaction table structure
