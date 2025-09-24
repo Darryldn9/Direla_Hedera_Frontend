@@ -15,64 +15,7 @@ export class CachedTransactionRoutes {
   }
 
   private setupRoutes(): void {
-    // Get cached transactions for a specific period
-    /**
-     * @swagger
-     * /cached-transactions/{accountId}/{periodType}:
-     *   get:
-     *     summary: Get cached transactions for a specific period
-     *     tags: [Cached Transactions]
-     *     parameters:
-     *       - in: path
-     *         name: accountId
-     *         required: true
-     *         schema:
-     *           type: string
-     *         description: Hedera account ID
-     *       - in: path
-     *         name: periodType
-     *         required: true
-     *         schema:
-     *           type: string
-     *           enum: [daily, weekly, monthly, all]
-     *         description: Time period for transactions
-     *       - in: query
-     *         name: startTime
-     *         schema:
-     *           type: number
-     *         description: Start timestamp (optional)
-     *       - in: query
-     *         name: endTime
-     *         schema:
-     *           type: number
-     *         description: End timestamp (optional)
-     *       - in: query
-     *         name: forceRefresh
-     *         schema:
-     *           type: boolean
-     *           default: false
-     *         description: Force refresh cache from Hedera
-     *     responses:
-     *       200:
-     *         description: Cached transactions retrieved successfully
-     *         content:
-     *           application/json:
-     *             schema:
-     *               type: object
-     *               properties:
-     *                 success:
-     *                   type: boolean
-     *                   example: true
-     *                 data:
-     *                   type: array
-     *                   items:
-     *                     $ref: '#/components/schemas/TransactionHistoryItem'
-     *       400:
-     *         description: Bad request
-     *       500:
-     *         description: Internal server error
-     */
-    this.router.get('/:accountId/:periodType', this.getCachedTransactions.bind(this));
+    // IMPORTANT: More specific routes must come BEFORE generic parameterized routes
 
     // Get revenue for a specific period
     /**
@@ -230,6 +173,66 @@ export class CachedTransactionRoutes {
      *         description: Internal server error
      */
     this.router.get('/:accountId/status', this.getCacheStatus.bind(this));
+
+    // Get cached transactions for a specific period
+    // NOTE: This MUST come LAST because it's a catch-all parameterized route
+    /**
+     * @swagger
+     * /cached-transactions/{accountId}/{periodType}:
+     *   get:
+     *     summary: Get cached transactions for a specific period
+     *     tags: [Cached Transactions]
+     *     parameters:
+     *       - in: path
+     *         name: accountId
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: Hedera account ID
+     *       - in: path
+     *         name: periodType
+     *         required: true
+     *         schema:
+     *           type: string
+     *           enum: [daily, weekly, monthly, all]
+     *         description: Time period for transactions
+     *       - in: query
+     *         name: startTime
+     *         schema:
+     *           type: number
+     *         description: Start timestamp (optional)
+     *       - in: query
+     *         name: endTime
+     *         schema:
+     *           type: number
+     *         description: End timestamp (optional)
+     *       - in: query
+     *         name: forceRefresh
+     *         schema:
+     *           type: boolean
+     *           default: false
+     *         description: Force refresh cache from Hedera
+     *     responses:
+     *       200:
+     *         description: Cached transactions retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 success:
+     *                   type: boolean
+     *                   example: true
+     *                 data:
+     *                   type: array
+     *                   items:
+     *                     $ref: '#/components/schemas/TransactionHistoryItem'
+     *       400:
+     *         description: Bad request
+     *       500:
+     *         description: Internal server error
+     */
+    this.router.get('/:accountId/:periodType', this.getCachedTransactions.bind(this));
   }
 
   private async getCachedTransactions(req: Request, res: Response): Promise<void> {

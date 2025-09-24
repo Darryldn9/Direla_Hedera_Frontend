@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CreditCard, Plus, Eye, EyeOff, Smartphone } from 'lucide-react-native';
+import { formatCurrencyWithHide, getDefaultCurrency } from '../utils/currency';
 
 interface VirtualCardProps {
   balance: number;
@@ -19,6 +20,7 @@ interface VirtualCardProps {
   onAddToWallet: () => void;
   showBalance: boolean;
   onToggleBalance: () => void;
+  currency?: string; // Optional currency prop
 }
 
 const { width } = Dimensions.get('window');
@@ -33,6 +35,7 @@ export default function VirtualCard({
   onAddToWallet,
   showBalance,
   onToggleBalance,
+  currency = getDefaultCurrency(), // Default to HBAR
 }: VirtualCardProps) {
   const [flipAnimation] = useState(new Animated.Value(0));
   const [scaleAnimation] = useState(new Animated.Value(1));
@@ -156,7 +159,7 @@ export default function VirtualCard({
               <View style={styles.balanceContainer}>
                 <Text style={styles.balanceLabel}>Available Balance</Text>
                 <Text style={styles.balanceAmount}>
-                  {showBalance ? `R ${balance.toFixed(2)}` : 'R ••••••'}
+                  {formatCurrencyWithHide(balance, currency, showBalance)}
                 </Text>
               </View>
 

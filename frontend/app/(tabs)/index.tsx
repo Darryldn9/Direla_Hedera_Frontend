@@ -30,15 +30,51 @@ function WalletScreen() {
   const { selectedAccount } = useAccount();
   const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
 
+  // State for live balance
+  const [liveBalance, setLiveBalance] = useState<number>(0);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
   // Fetch transaction history for the selected account
-  const { 
-    transactions: hederaTransactions, 
-    isLoading: isLoadingTransactions, 
+  const {
+    transactions: hederaTransactions,
+    isLoading: isLoadingTransactions,
     error: transactionError,
-    refresh: refreshTransactions 
+    refresh: refreshTransactions
   } = useTransactionHistory(accountId, 10);
 
-  const balance = selectedAccount?.balance ?? 0;
+  // Fetch live balance function
+  const fetchLiveBalance = async () => {
+    if (!selectedAccount?.account_id) {
+      setLiveBalance(0);
+      return;
+    }
+
+    setBalanceLoading(true);
+    try {
+      const response = await fetch(`http://196.24.183.249:3000/api/hedera-accounts/balance/${selectedAccount.account_id}`);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setLiveBalance(data.data.balance);
+        console.log('Live balance fetched:', data.data.balance);
+      } else {
+        console.error('Failed to fetch live balance:', data.error);
+        setLiveBalance(selectedAccount.balance ?? 0); // Fallback to database balance
+      }
+    } catch (error) {
+      console.error('Error fetching live balance:', error);
+      setLiveBalance(selectedAccount.balance ?? 0); // Fallback to database balance
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  // Fetch live balance when account changes
+  useEffect(() => {
+    fetchLiveBalance();
+  }, [selectedAccount?.account_id]);
+
+  const balance = liveBalance;
   
   // Console log loading and error states
   useEffect(() => {
@@ -137,8 +173,23 @@ function WalletScreen() {
 
         {/* Page Title */}
         <View style={styles.titleContainer}>
-          <Text style={styles.pageTitle}>Wallet</Text>
-          <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
+          <View style={styles.titleRow}>
+            <View>
+              <Text style={styles.pageTitle}>Wallet</Text>
+              <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                fetchLiveBalance();
+                refreshTransactions();
+              }}
+              style={styles.refreshButton}
+            >
+              <Text style={styles.refreshButtonText}>
+                {balanceLoading ? 'Loading...' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.cardContainer}>
@@ -333,6 +384,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 20,
   },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   pageTitle: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -343,6 +399,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     color: '#8E8E93',
+  },
+  refreshButton: {
+    backgroundColor: '#0C7C59',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  refreshButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
   },
   cardContainer: {
     paddingHorizontal: 20,
