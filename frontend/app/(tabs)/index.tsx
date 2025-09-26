@@ -31,8 +31,8 @@ function WalletScreen() {
   const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
 
   // State for live balance
-  const [liveBalance, setLiveBalance] = useState<number>(0);
-  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [liveBalance, setLiveBalance] = useState<number | null>(null); // Start with null to indicate not loaded
+  const [balanceLoading, setBalanceLoading] = useState(true); // Start with true to show loading initially
 
   // Fetch transaction history for the selected account
   const {
@@ -46,19 +46,21 @@ function WalletScreen() {
   const fetchLiveBalance = async () => {
     if (!selectedAccount?.account_id) {
       setLiveBalance(0);
+      setBalanceLoading(false);
       return;
     }
 
     setBalanceLoading(true);
     try {
-      const response = await fetch(`http://196.24.183.249:3000/api/hedera-accounts/balance/${selectedAccount.account_id}`);
-      const data = await response.json();
+      // Use the configured API service instead of hardcoded URL
+      const { api } = await import('@/services/api');
+      const response = await api.hedera.getAccountBalance(selectedAccount.account_id);
 
-      if (data.success && data.data) {
-        setLiveBalance(data.data.balance);
-        console.log('Live balance fetched:', data.data.balance);
+      if (response.success && response.data) {
+        setLiveBalance(response.data.balance);
+        console.log('Live balance fetched:', response.data.balance);
       } else {
-        console.error('Failed to fetch live balance:', data.error);
+        console.error('Failed to fetch live balance:', response.error);
         setLiveBalance(selectedAccount.balance ?? 0); // Fallback to database balance
       }
     } catch (error) {
@@ -74,7 +76,7 @@ function WalletScreen() {
     fetchLiveBalance();
   }, [selectedAccount?.account_id]);
 
-  const balance = liveBalance;
+  const balance = liveBalance ?? 0; // Display 0 while loading or if null
   
   // Console log loading and error states
   useEffect(() => {
@@ -193,14 +195,15 @@ function WalletScreen() {
         </View>
 
         <View style={styles.cardContainer}>
-          <VirtualCard 
-            balance={balance} 
+          <VirtualCard
+            balance={balance}
             cardNumber={cardNumber}
             expiryDate={expiryDate}
             holderName={holderName}
-            showBalance={showBalance} 
+            showBalance={showBalance}
             onAddToWallet={() => setShowWalletModal(true)}
             onToggleBalance={() => setShowBalance(!showBalance)}
+            isLoading={balanceLoading}
           />
         </View>
 

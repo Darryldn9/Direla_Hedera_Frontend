@@ -21,6 +21,7 @@ interface VirtualCardProps {
   showBalance: boolean;
   onToggleBalance: () => void;
   currency?: string; // Optional currency prop
+  isLoading?: boolean; // Optional loading state
 }
 
 const { width } = Dimensions.get('window');
@@ -36,10 +37,12 @@ export default function VirtualCard({
   showBalance,
   onToggleBalance,
   currency = getDefaultCurrency(), // Default to HBAR
+  isLoading = false,
 }: VirtualCardProps) {
   const [flipAnimation] = useState(new Animated.Value(0));
   const [scaleAnimation] = useState(new Animated.Value(1));
   const [glowAnimation] = useState(new Animated.Value(0));
+  const [isFlipped, setIsFlipped] = useState(false);
 
   useEffect(() => {
     // Subtle glow animation
@@ -64,8 +67,11 @@ export default function VirtualCard({
 
   const handleCardPress = () => {
     // Flip animation
+    const newValue = isFlipped ? 0 : 1;
+    setIsFlipped(!isFlipped);
+
     Animated.timing(flipAnimation, {
-      toValue: flipAnimation._value === 0 ? 1 : 0,
+      toValue: newValue,
       duration: 600,
       useNativeDriver: true,
     }).start();
@@ -157,9 +163,14 @@ export default function VirtualCard({
 
               {/* Balance */}
               <View style={styles.balanceContainer}>
-                <Text style={styles.balanceLabel}>Available Balance</Text>
+                <Text style={styles.balanceLabel}>
+                  {isLoading ? 'Loading Balance...' : 'Available Balance'}
+                </Text>
                 <Text style={styles.balanceAmount}>
-                  {formatCurrencyWithHide(balance, currency, showBalance)}
+                  {isLoading
+                    ? '••••••'
+                    : formatCurrencyWithHide(balance, currency, showBalance)
+                  }
                 </Text>
               </View>
 

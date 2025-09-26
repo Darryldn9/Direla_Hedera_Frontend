@@ -7,13 +7,16 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import QRCode from 'react-native-qrcode-svg';
 import { useAppMode } from '../../contexts/AppContext';
 import { useAccount } from '../../contexts/AccountContext';
 import { useUserManagement } from '../../hooks/useAuth';
 import { usePaymentManager } from '../../hooks/usePayments';
+import { usePaymentPollingWithToast } from '../../hooks/usePaymentPollingWithToast';
 import { useToast } from '../../hooks/useToast';
 import { ProcessPaymentWithDIDRequest } from '../../types/api';
 import {
@@ -26,6 +29,9 @@ import {
   ArrowRight,
   MapPin,
   X,
+  ArrowUpRight,
+  ArrowDownLeft,
+  DollarSign,
 } from 'lucide-react-native';
 
 interface QuickContact {
@@ -54,11 +60,22 @@ interface QRPaymentData {
 }
 
 export default function PayScreen() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'send' | 'receive'>('send');
+  
+  // Send payment states
   const [paymentMethod, setPaymentMethod] = useState<'qr' | 'whatsapp' | 'tap' | 'contacts' | null>(null);
   const [recipient, setRecipient] = useState('');
   const [showCamera, setShowCamera] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  
+  // Receive payment states
+  const [amount, setAmount] = useState('');
+  const [showQRDialog, setShowQRDialog] = useState(false);
+  const [autoPollingStarted, setAutoPollingStarted] = useState(false);
+  const [qrValue, setQrValue] = useState('');
+  
   const [permission, requestPermission] = useCameraPermissions();
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
@@ -68,6 +85,20 @@ export default function PayScreen() {
   const { currentUser } = useUserManagement();
   const { makePayment } = usePaymentManager();
   const { showSuccess, showError, showInfo } = useToast();
+
+  // Initialize the polling hook for receive payments
+  const poller = usePaymentPollingWithToast(
+    selectedAccount && amount
+      ? {
+          toAccountId: selectedAccount.account_id,
+          amountHBAR: parseFloat(amount) / 100, // Convert cents to HBAR
+          expectedMemoContains: selectedAccount.alias || selectedAccount.account_id,
+          timeoutMs: 60000,
+          intervalMs: 10000,
+          amountTolerance: Math.max(0.00000001, (parseFloat(amount) / 100) * 0.01),
+        }
+      : undefined
+  );
 
   // Mode-aware data
   const businessName = "Mama Thandi's Spaza Shop";
@@ -89,6 +120,55 @@ export default function PayScreen() {
     { id: '4', name: 'Petrol Station Shop', distance: '1.2km', category: 'Fuel & Snacks', rating: 4.5 },
   ];
 
+  // Generate QR code data for receive payments
+  useEffect(() => {
+    if (showQRDialog && selectedAccount && amount) {
+      const qrData = {
+        toAccountId: selectedAccount.account_id,
+        amount: parseFloat(amount) / 100,
+        currency: 'HBAR',
+        accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
+        memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`,
+        merchant_user_id: currentUser?.user_id,
+        timestamp: new Date().toISOString(),
+      };
+      setQrValue(JSON.stringify(qrData));
+    }
+  }, [showQRDialog, selectedAccount, amount, currentUser?.user_id]);
+
+  // Handle polling lifecycle
+  useEffect(() => {
+    if (showQRDialog && !autoPollingStarted && poller?.start && selectedAccount && amount) {
+      poller.start();
+      setAutoPollingStarted(true);
+    }
+    if (!showQRDialog && autoPollingStarted) {
+      poller?.cancel();
+      setAutoPollingStarted(false);
+    }
+  }, [showQRDialog, autoPollingStarted, poller?.start, poller?.cancel, selectedAccount, amount]);
+
+  // Handle payment confirmation
+  useEffect(() => {
+    if (poller?.status === 'confirmed') {
+      setShowQRDialog(false);
+      setAutoPollingStarted(false);
+      // Handle successful payment
+      onPaymentSuccess(parseFloat(amount));
+    } else if (poller?.status === 'timeout') {
+      Alert.alert('Payment timed out', 'No payment detected within 1 minute.');
+      setAutoPollingStarted(false);
+    }
+  }, [poller?.status]);
+
+  const onPaymentSuccess = (amountReceived: number) => {
+    showSuccess(
+      'Payment Received!',
+      `Successfully received ${(amountReceived / 100).toFixed(2)} HBAR`,
+      5000
+    );
+    setAmount('');
+  };
 
   const processQRPayment = async (paymentData: QRPaymentData) => {
     // Validate that we have a selected account to send from
@@ -381,6 +461,14 @@ export default function PayScreen() {
     }
   };
 
+  const handleQRPayment = () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount');
+      return;
+    }
+    setShowQRDialog(true);
+  };
+
   const PaymentMethodButton = ({ 
     method, 
     icon, 
@@ -476,123 +564,213 @@ export default function PayScreen() {
           <Text style={styles.pageSubtitle}>Choose your payment method</Text>
         </View>
 
-        {/* Payment Methods - 2x2 Grid */}
-        <View style={styles.methodsContainer}>
-          <Text style={styles.methodsSectionTitle}>Payment Methods</Text>
-          
-          {/* Top Row */}
-          <View style={styles.methodsRow}>
-            <PaymentMethodButton
-              method="qr"
-              icon={<QrCode size={20} color={paymentMethod === 'qr' ? '#FFFFFF' : '#0C7C59'} />}
-              title={requestingPermission ? "Requesting..." : "QR Code"}
-              description="Scan to pay"
-            />
-            <PaymentMethodButton
-              method="whatsapp"
-              icon={<MessageCircle size={20} color={paymentMethod === 'whatsapp' ? '#FFFFFF' : '#25D366'} />}
-              title="WhatsApp"
-              description="Send via chat"
-            />
-          </View>
-
-          {/* Bottom Row */}
-          <View style={styles.methodsRow}>
-            <PaymentMethodButton
-              method="tap"
-              icon={<Nfc size={20} color={paymentMethod === 'tap' ? '#FFFFFF' : '#3498DB'} />}
-              title="Tap to Pay"
-              description="NFC payment"
-            />
-            <PaymentMethodButton
-              method="contacts"
-              icon={<Users size={20} color={paymentMethod === 'contacts' ? '#FFFFFF' : '#9B59B6'} />}
-              title="Contacts"
-              description="Phone number"
-            />
+        {/* Tab Toggle */}
+        <View style={styles.tabToggleContainer}>
+          <View style={styles.tabOptions}>
+            <TouchableOpacity
+              style={[
+                styles.tabOption,
+                activeTab === 'send' && styles.tabOptionActive
+              ]}
+              onPress={() => setActiveTab('send')}
+            >
+              <ArrowUpRight size={20} color={activeTab === 'send' ? '#FFFFFF' : '#0C7C59'} />
+              <Text style={[
+                styles.tabOptionText,
+                activeTab === 'send' && styles.tabOptionTextActive
+              ]}>
+                Send Payment
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.tabOption,
+                activeTab === 'receive' && styles.tabOptionActive
+              ]}
+              onPress={() => setActiveTab('receive')}
+            >
+              <ArrowDownLeft size={20} color={activeTab === 'receive' ? '#FFFFFF' : '#0C7C59'} />
+              <Text style={[
+                styles.tabOptionText,
+                activeTab === 'receive' && styles.tabOptionTextActive
+              ]}>
+                Request Payment
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-
-        {/* Quick Contacts - Show when contacts method is selected */}
-        {paymentMethod === 'contacts' && (
-          <View style={styles.quickContactsContainer}>
-            <Text style={styles.sectionTitle}>Quick Contacts</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.contactsList}>
-                {quickContacts.map((contact) => (
-                  <TouchableOpacity
-                    key={contact.id}
-                    style={styles.contactItem}
-                    onPress={() => setRecipient(contact.phone)}
-                  >
-                    <Text style={styles.contactAvatar}>{contact.avatar}</Text>
-                    <Text style={styles.contactName}>{contact.name}</Text>
-                  </TouchableOpacity>
-                ))}
+        {/* Send Payment Tab Content */}
+        {activeTab === 'send' && (
+          <>
+            {/* Payment Methods - 2x2 Grid */}
+            <View style={styles.methodsContainer}>
+              <Text style={styles.methodsSectionTitle}>Payment Methods</Text>
+              
+              {/* Top Row */}
+              <View style={styles.methodsRow}>
+                <PaymentMethodButton
+                  method="qr"
+                  icon={<QrCode size={20} color={paymentMethod === 'qr' ? '#FFFFFF' : '#0C7C59'} />}
+                  title={requestingPermission ? "Requesting..." : "QR Code"}
+                  description="Scan to pay"
+                />
               </View>
-            </ScrollView>
-            
-            {/* Manual Phone Number Input */}
-            <TextInput
-              style={styles.phoneInput}
-              value={recipient}
-              onChangeText={setRecipient}
-              placeholder="Enter phone number"
-              keyboardType="phone-pad"
-              placeholderTextColor="#BDC3C7"
-            />
-          </View>
+
+              {/* Bottom Row */}
+              <View style={styles.methodsRow}>
+                <PaymentMethodButton
+                  method="tap"
+                  icon={<Nfc size={20} color={paymentMethod === 'tap' ? '#FFFFFF' : '#3498DB'} />}
+                  title="Tap to Pay"
+                  description="NFC payment"
+                />
+                <PaymentMethodButton
+                  method="contacts"
+                  icon={<Users size={20} color={paymentMethod === 'contacts' ? '#FFFFFF' : '#9B59B6'} />}
+                  title="Contacts"
+                  description="Phone number"
+                />
+              </View>
+            </View>
+
+            {/* Quick Contacts - Show when contacts method is selected */}
+            {paymentMethod === 'contacts' && (
+              <View style={styles.quickContactsContainer}>
+                <Text style={styles.sectionTitle}>Quick Contacts</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.contactsList}>
+                    {quickContacts.map((contact) => (
+                      <TouchableOpacity
+                        key={contact.id}
+                        style={styles.contactItem}
+                        onPress={() => setRecipient(contact.phone)}
+                      >
+                        <Text style={styles.contactAvatar}>{contact.avatar}</Text>
+                        <Text style={styles.contactName}>{contact.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                
+                {/* Manual Phone Number Input */}
+                <TextInput
+                  style={styles.phoneInput}
+                  value={recipient}
+                  onChangeText={setRecipient}
+                  placeholder="Enter phone number"
+                  keyboardType="phone-pad"
+                  placeholderTextColor="#BDC3C7"
+                />
+              </View>
+            )}
+
+            {/* Nearby Merchants */}
+            <View style={styles.merchantsContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Nearby Merchants on Direla</Text>
+                <TouchableOpacity>
+                  <MapPin size={20} color="#0C7C59" />
+                </TouchableOpacity>
+              </View>
+              {nearbyMerchants.map((merchant) => (
+                <TouchableOpacity key={merchant.id} style={styles.merchantItem}>
+                  <View style={styles.merchantIcon}>
+                    <ShoppingCart size={20} color="#0C7C59" />
+                  </View>
+                  <View style={styles.merchantInfo}>
+                    <Text style={styles.merchantName}>{merchant.name}</Text>
+                    <Text style={styles.merchantCategory}>
+                      {merchant.category} • {merchant.distance} • ⭐ {merchant.rating}
+                    </Text>
+                  </View>
+                  <ArrowRight size={16} color="#BDC3C7" />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Bill Splitting Feature */}
+            <View style={styles.billSplitContainer}>
+              <TouchableOpacity style={styles.billSplitButton}>
+                <Users size={20} color="#9B59B6" />
+                <Text style={styles.billSplitText}>Split Bill with Friends</Text>
+                <ArrowRight size={16} color="#9B59B6" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Payment Button */}
+            <TouchableOpacity 
+              style={[styles.payButton, isProcessingPayment && styles.payButtonProcessing]} 
+              onPress={handlePayment}
+              disabled={isProcessingPayment}
+            >
+              <Zap size={20} color="#FFFFFF" />
+              <Text style={styles.payButtonText}>
+                {isProcessingPayment ? 'Processing...' :
+                 paymentMethod === 'tap' ? 'Ready to Tap' :
+                 paymentMethod === 'qr' ? 'Scan QR Code' :
+                 'Send Payment'}
+              </Text>
+            </TouchableOpacity>
+          </>
         )}
 
-        {/* Nearby Merchants */}
-        <View style={styles.merchantsContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nearby Merchants on Direla</Text>
-            <TouchableOpacity>
-              <MapPin size={20} color="#0C7C59" />
-            </TouchableOpacity>
-          </View>
-          {nearbyMerchants.map((merchant) => (
-            <TouchableOpacity key={merchant.id} style={styles.merchantItem}>
-              <View style={styles.merchantIcon}>
-                <ShoppingCart size={20} color="#0C7C59" />
+        {/* Receive Payment Tab Content */}
+        {activeTab === 'receive' && (
+          <>
+            {/* Amount Input */}
+            <View style={styles.receiveContainer}>
+              <Text style={styles.methodsSectionTitle}>Request Payment Amount</Text>
+              
+              <View style={styles.amountInputContainer}>
+                <DollarSign size={24} color="#0C7C59" />
+                <TextInput
+                  style={styles.amountInput}
+                  value={amount}
+                  onChangeText={setAmount}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  placeholderTextColor="#BDC3C7"
+                />
+                <Text style={styles.currencyText}>HBAR</Text>
               </View>
-              <View style={styles.merchantInfo}>
-                <Text style={styles.merchantName}>{merchant.name}</Text>
-                <Text style={styles.merchantCategory}>
-                  {merchant.category} • {merchant.distance} • ⭐ {merchant.rating}
-                </Text>
+
+              {/* Generate QR Button */}
+              <TouchableOpacity 
+                style={[styles.generateQRButton, (!amount || parseFloat(amount) <= 0) && styles.generateQRButtonDisabled]} 
+                onPress={handleQRPayment}
+                disabled={!amount || parseFloat(amount) <= 0}
+              >
+                <QrCode size={20} color="#FFFFFF" />
+                <Text style={styles.generateQRButtonText}>Generate Payment QR Code</Text>
+              </TouchableOpacity>
+
+              {/* Request Methods */}
+              <View style={styles.requestMethodsContainer}>
+                <Text style={styles.sectionTitle}>Other Request Methods</Text>
+                
+                <TouchableOpacity style={styles.requestMethodButton}>
+                  <MessageCircle size={20} color="#25D366" />
+                  <Text style={styles.requestMethodText}>Send via WhatsApp</Text>
+                  <ArrowRight size={16} color="#BDC3C7" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.requestMethodButton}>
+                  <Users size={20} color="#9B59B6" />
+                  <Text style={styles.requestMethodText}>Send to Contacts</Text>
+                  <ArrowRight size={16} color="#BDC3C7" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.requestMethodButton}>
+                  <Nfc size={20} color="#3498DB" />
+                  <Text style={styles.requestMethodText}>Request via NFC</Text>
+                  <ArrowRight size={16} color="#BDC3C7" />
+                </TouchableOpacity>
               </View>
-              <ArrowRight size={16} color="#BDC3C7" />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Bill Splitting Feature */}
-        <View style={styles.billSplitContainer}>
-          <TouchableOpacity style={styles.billSplitButton}>
-            <Users size={20} color="#9B59B6" />
-            <Text style={styles.billSplitText}>Split Bill with Friends</Text>
-            <ArrowRight size={16} color="#9B59B6" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Payment Button */}
-        <TouchableOpacity 
-          style={[styles.payButton, isProcessingPayment && styles.payButtonProcessing]} 
-          onPress={handlePayment}
-          disabled={isProcessingPayment}
-        >
-          <Zap size={20} color="#FFFFFF" />
-          <Text style={styles.payButtonText}>
-            {isProcessingPayment ? 'Processing...' :
-             paymentMethod === 'whatsapp' ? 'Send via WhatsApp' :
-             paymentMethod === 'tap' ? 'Ready to Tap' :
-             paymentMethod === 'qr' ? 'Scan QR Code' :
-             'Send Payment'}
-          </Text>
-        </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         {/* Hedera Info */}
         <View style={styles.hederaInfo}>
@@ -602,6 +780,44 @@ export default function PayScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* QR Code Modal for Receive Payments */}
+      <Modal visible={showQRDialog} transparent animationType="fade">
+        <View style={styles.qrOverlay}>
+          <View style={styles.qrDialog}>
+            <Text style={styles.qrTitle}>Payment Request QR Code</Text>
+            <View style={styles.qrCodeContainer}>
+              {qrValue ? (
+                <QRCode
+                  value={qrValue}
+                  size={180}
+                  color="#1C1C1E"
+                  backgroundColor="#FFFFFF"
+                />
+              ) : (
+                <Text>Generating QR...</Text>
+              )}
+            </View>
+            <Text style={styles.qrAmountText}>{(parseFloat(amount || '0') / 100).toFixed(2)} HBAR</Text>
+            <Text style={styles.qrSubtitle}>Ask the payer to scan this QR code</Text>
+            {poller && (
+              <Text style={styles.countdown}>
+                Time remaining: {Math.floor((poller.remainingMs || 0) / 1000)}s
+              </Text>
+            )}
+            <TouchableOpacity
+              style={styles.cancelQRButton}
+              onPress={() => {
+                poller?.cancel();
+                setShowQRDialog(false);
+                setAutoPollingStarted(false);
+              }}
+            >
+              <Text style={styles.cancelQRButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -661,6 +877,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     color: '#8E8E93',
+  },
+  // Tab Toggle Styles
+  tabToggleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  tabOptions: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  tabOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  tabOptionActive: {
+    backgroundColor: '#0C7C59',
+  },
+  tabOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0C7C59',
+  },
+  tabOptionTextActive: {
+    color: '#FFFFFF',
   },
   methodsContainer: {
     paddingHorizontal: 20,
@@ -868,6 +1121,141 @@ const styles = StyleSheet.create({
   payButtonProcessing: {
     backgroundColor: '#95A5A6',
     opacity: 0.7,
+  },
+  // Receive Payment Styles
+  receiveContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    gap: 12,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    textAlign: 'center',
+  },
+  currencyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  generateQRButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0C7C59',
+    padding: 16,
+    borderRadius: 16,
+    gap: 8,
+    marginBottom: 24,
+  },
+  generateQRButtonDisabled: {
+    backgroundColor: '#BDC3C7',
+    opacity: 0.6,
+  },
+  generateQRButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  requestMethodsContainer: {
+    gap: 12,
+  },
+  requestMethodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  requestMethodText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  // QR Code Modal Styles
+  qrOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  qrDialog: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 300,
+    width: '100%',
+  },
+  qrTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  qrCodeContainer: {
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  qrAmountText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0C7C59',
+    marginBottom: 8,
+  },
+  qrSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  countdown: {
+    fontSize: 14,
+    color: '#E74C3C',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  cancelQRButton: {
+    backgroundColor: '#E74C3C',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  cancelQRButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   hederaInfo: {
     backgroundColor: '#FFF3CD',
