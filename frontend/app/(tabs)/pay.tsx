@@ -8,6 +8,8 @@ import {
   ScrollView,
   Alert,
   Modal,
+  Linking, // Added
+  Platform, // Added
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -75,6 +77,10 @@ export default function PayScreen() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [autoPollingStarted, setAutoPollingStarted] = useState(false);
   const [qrValue, setQrValue] = useState('');
+
+  // State for optional features
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<QuickContact | null>(null);
   
   const [permission, requestPermission] = useCameraPermissions();
   const { mode } = useAppMode();
@@ -91,11 +97,11 @@ export default function PayScreen() {
     selectedAccount && amount
       ? {
           toAccountId: selectedAccount.account_id,
-          amountHBAR: parseFloat(amount) / 100, // Convert cents to HBAR
+          amountHBAR: parseFloat(amount), // Direct HBAR input
           expectedMemoContains: selectedAccount.alias || selectedAccount.account_id,
           timeoutMs: 60000,
           intervalMs: 10000,
-          amountTolerance: Math.max(0.00000001, (parseFloat(amount) / 100) * 0.01),
+          amountTolerance: Math.max(0.00000001, parseFloat(amount) * 0.01),
         }
       : undefined
   );
@@ -125,7 +131,7 @@ export default function PayScreen() {
     if (showQRDialog && selectedAccount && amount) {
       const qrData = {
         toAccountId: selectedAccount.account_id,
-        amount: parseFloat(amount) / 100,
+        amount: parseFloat(amount), // Direct HBAR input
         currency: 'HBAR',
         accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
         memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`,
@@ -164,10 +170,154 @@ export default function PayScreen() {
   const onPaymentSuccess = (amountReceived: number) => {
     showSuccess(
       'Payment Received!',
-      `Successfully received ${(amountReceived / 100).toFixed(2)} HBAR`,
+      `Successfully received ${amountReceived.toFixed(2)} HBAR`,
       5000
     );
     setAmount('');
+  };
+
+  const generateWhatsAppPaymentLink = () => {
+    if (!selectedAccount) {
+      Alert.alert('No Account', 'No payment account selected. Please select an account in settings.');
+      return;
+    }
+  
+    if (!amount || parseFloat(amount) <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount first');
+      return;
+    }
+  
+    const paymentAmount = parseFloat(amount);
+    const merchantName = mode === 'business' ? businessName : personalName;
+    const accountAlias = selectedAccount.alias || `Account ${selectedAccount.account_id}`;
+    
+    // Clean, professional message format (same as sendWhatsAppToContact)
+    const message = `💳 Payment Request from ${merchantName}
+  
+  💰 Amount: ${paymentAmount.toFixed(2)} HBAR
+  📝 For: Payment to ${accountAlias}
+  
+  🚀 EASY WAY - Tap to pay:
+  https://pay.direla.app/demo-payment-link
+  
+  📱 MANUAL WAY - Use your Direla app or WhatsApp Bot:
+  Account: ${selectedAccount.account_id}
+  Amount: ${paymentAmount.toFixed(2)} HBAR
+  Memo: Payment to ${accountAlias}
+  
+  ⏰ Request expires in 24 hours
+  ⚡ Powered by Hedera TestNet`;
+  
+    // Create WhatsApp URL (no specific contact)
+    const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+  
+    // Try to open WhatsApp directly
+    Linking.openURL(whatsappUrl)
+      .catch((err) => {
+        console.error('Error opening WhatsApp:', err);
+        Alert.alert(
+          'WhatsApp Not Found',
+          'WhatsApp is not installed on this device. Please install WhatsApp to send payment requests.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open App Store',
+              onPress: () => {
+                const appStoreUrl = Platform.OS === 'ios'
+                  ? 'https://apps.apple.com/app/whatsapp-messenger/id310633997'
+                  : 'https://play.google.com/store/apps/details?id=com.whatsapp';
+                Linking.openURL(appStoreUrl);
+              }
+            }
+          ]
+        );
+      });
+  };
+  
+  const sendWhatsAppToContact = (contact: QuickContact) => {
+    // Add the null check here
+    if (!selectedAccount) {
+      Alert.alert('No Account', 'No payment account selected. Please select an account in settings.');
+      return;
+    }
+  
+    if (!amount || parseFloat(amount) <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount first');
+      return;
+    }
+  
+    const paymentAmount = parseFloat(amount);
+    const merchantName = mode === 'business' ? businessName : personalName;
+    const accountAlias = selectedAccount.alias || `Account ${selectedAccount.account_id}`;
+    
+    // Clean, professional message format (same as generateWhatsAppPaymentLink)
+    const message = `💳 Payment Request from ${merchantName}
+  
+  💰 Amount: ${paymentAmount.toFixed(2)} HBAR
+  📝 For: Payment to ${accountAlias}
+  
+  🚀 EASY WAY - Tap to pay:
+  https://pay.direla.app/demo-payment-link
+  
+  📱 MANUAL WAY - Use your Direla app:
+  Account: ${selectedAccount.account_id}
+  Amount: ${paymentAmount.toFixed(2)} HBAR
+  Memo: Payment to ${accountAlias}
+  
+  ⏰ Request expires in 24 hours
+  ⚡ Powered by Hedera TestNet`;
+  
+    // WhatsApp URL with specific phone number
+    const whatsappUrl = `whatsapp://send?phone=${contact.phone.replace(/[^0-9]/g, '')}&text=${encodeURIComponent(message)}`;
+  
+    Linking.openURL(whatsappUrl).catch(() => {
+      Alert.alert('Error', 'Could not open WhatsApp for this contact.');
+    });
+  };
+  
+  const copyPaymentData = async () => {
+    // Add the null check here
+    if (!selectedAccount) {
+      Alert.alert('No Account', 'No payment account selected. Please select an account in settings.');
+      return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount first');
+      return;
+    }
+  
+    const paymentAmount = parseFloat(amount);
+    const merchantName = mode === 'business' ? businessName : personalName;
+    const accountAlias = selectedAccount.alias || `Account ${selectedAccount.account_id}`;
+  
+    // Clean format for copying (same as WhatsApp messages)
+    const message = `💳 Payment Request from ${merchantName}
+  
+  💰 Amount: ${paymentAmount.toFixed(2)} HBAR
+  📝 For: Payment to ${accountAlias}
+  
+  🚀 EASY WAY - Tap to pay:
+  https://pay.direla.app/demo-payment-link
+  
+  📱 MANUAL WAY - Use your Direla app:
+  Account: ${selectedAccount.account_id}
+  Amount: ${paymentAmount.toFixed(2)} HBAR
+  Memo: Payment to ${accountAlias}
+  
+  ⏰ Request expires in 24 hours
+  ⚡ Powered by Hedera TestNet`;
+  
+    // Copy to clipboard (requires @react-native-clipboard/clipboard)
+    // Clipboard.setString(message);
+  
+    // For now, show alert with data
+    Alert.alert(
+      'Payment Request Data',
+      message,
+      [
+        { text: 'OK' }
+      ]
+    );
   };
 
   const processQRPayment = async (paymentData: QRPaymentData) => {
@@ -750,7 +900,10 @@ export default function PayScreen() {
               <View style={styles.requestMethodsContainer}>
                 <Text style={styles.sectionTitle}>Other Request Methods</Text>
                 
-                <TouchableOpacity style={styles.requestMethodButton}>
+                <TouchableOpacity
+                  style={styles.requestMethodButton}
+                  onPress={generateWhatsAppPaymentLink}
+                >
                   <MessageCircle size={20} color="#25D366" />
                   <Text style={styles.requestMethodText}>Send via WhatsApp</Text>
                   <ArrowRight size={16} color="#BDC3C7" />
@@ -798,7 +951,7 @@ export default function PayScreen() {
                 <Text>Generating QR...</Text>
               )}
             </View>
-            <Text style={styles.qrAmountText}>{(parseFloat(amount || '0') / 100).toFixed(2)} HBAR</Text>
+            <Text style={styles.qrAmountText}>{parseFloat(amount || '0').toFixed(2)} HBAR</Text>
             <Text style={styles.qrSubtitle}>Ask the payer to scan this QR code</Text>
             {poller && (
               <Text style={styles.countdown}>
