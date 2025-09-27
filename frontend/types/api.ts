@@ -88,6 +88,9 @@ export interface TransferRequest {
   fromAccountId: string;
   toAccountId: string;
   amount: number;
+  fromCurrency: string;
+  toCurrency: string;
+  quote: CurrencyQuote;
 }
 
 export interface PaymentRequest {
@@ -95,9 +98,9 @@ export interface PaymentRequest {
   toAccountId: string;
   amount: number;
   memo?: string;
-  fromCurrency?: string;
-  toCurrency?: string;
-  quoteId?: string;
+  fromCurrency: string;
+  toCurrency: string;
+  quote: CurrencyQuote;
 }
 
 export interface TransactionResponse {
@@ -129,7 +132,7 @@ export interface ProcessPaymentWithDIDRequest {
   merchant_user_id?: string;
   fromCurrency?: string;
   toCurrency?: string;
-  quoteId?: string;
+  quote?: CurrencyQuote;
 }
 
 export interface ProcessPaymentWithDIDResponse {

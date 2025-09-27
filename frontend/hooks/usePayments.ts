@@ -3,7 +3,8 @@ import { useApi } from './useApi';
 import { api } from '../services/api';
 import { 
   TransferRequest, 
-  PaymentRequest, 
+  PaymentRequest,
+  ProcessPaymentWithDIDRequest, 
 } from '../types/api';
 import { PaymentResult, PaymentValidation } from '../services/api/payment.service';
 
@@ -43,7 +44,7 @@ export function usePaymentManager() {
   
   const payments = usePayments();
 
-  const makePayment = useCallback(async (paymentData: PaymentRequest) => {
+  const makePayment = useCallback(async (paymentData: ProcessPaymentWithDIDRequest) => {
     const result = await payments.processPayment.execute(paymentData);
     
     // console.log("[DEBUG] MAKE PAYMENT RESULT", result);

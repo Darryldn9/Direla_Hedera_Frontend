@@ -1,3 +1,4 @@
+import process from 'process';
 import {
   Client,
   AccountId,
@@ -13,12 +14,18 @@ import {
   Status,
   PublicKey,
   TransactionRecordQuery,
-  TransactionId
+  TransactionId,
+  TokenId,
+  TokenMintTransaction,
+  TokenBurnTransaction,
+  TokenAssociateTransaction,
+  TokenDissociateTransaction
 } from '@hashgraph/sdk';
 import { HederaConfig, HederaTransactionResult, TransactionHistoryItem } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
 import { assertValidHederaAccountId } from '../utils/hedera-validation.js';
+import { fromBaseUnits } from '../utils/token-amount.js';
 
 export class HederaInfrastructure {
   private client: Client;
@@ -64,9 +71,9 @@ export class HederaInfrastructure {
       
       const balance = await query.execute(this.client);
       
-      // Define the token IDs for USD and ZAR
-      const USD_TOKEN_ID = '0.0.6869755';
-      const ZAR_TOKEN_ID = '0.0.6889204';
+      // Define the token IDs for USD and ZAR from environment variables
+      const USD_TOKEN_ID = process.env.USD_TOKEN_ID || '0.0.6916971';
+      const ZAR_TOKEN_ID = process.env.ZAR_TOKEN_ID || '0.0.6916972';
       
       // Initialize the balances array with HBAR, USD, and ZAR
       const balances = [
@@ -91,9 +98,9 @@ export class HederaInfrastructure {
             const amount = balanceAmount.toNumber();
             
             if (tokenIdString === USD_TOKEN_ID && balances[1]) {
-              balances[1].amount = amount;
+              balances[1].amount = fromBaseUnits(amount, 'USD');
             } else if (tokenIdString === ZAR_TOKEN_ID && balances[2]) {
-              balances[2].amount = amount;
+              balances[2].amount = fromBaseUnits(amount, 'ZAR');
             }
           }
         }
@@ -543,8 +550,8 @@ export class HederaInfrastructure {
    */
   async createTopic(): Promise<string> {
     try {
-      // Do we need to create a new topic every time the app runs?
-      return "0.0.6880055";
+      // Use HCS topic ID from environment variable or fallback to hardcoded value
+      return process.env.HCS_TOPIC_ID || "0.0.6880055";
 
       /*
       logger.info('Creating HCS topic');
@@ -757,6 +764,286 @@ export class HederaInfrastructure {
       ];
 
       return mockTransactions.slice(0, limit);
+    }
+  }
+
+  /**
+   * Get token ID for a given currency code
+   */
+  private getTokenIdForCurrency(currency: string): string | null {
+    const tokenMap: Record<string, string | null> = {
+      'USD': process.env.USD_TOKEN_ID || '0.0.6869755',
+      'ZAR': process.env.ZAR_TOKEN_ID || '0.0.6889204',
+      'HBAR': null // HBAR doesn't have a token ID
+    };
+    
+    return tokenMap[currency] || null;
+  }
+
+  /**
+   * Associate a token with an account
+   */
+  async associateToken(accountId: string, tokenId: string, privateKey: string): Promise<HederaTransactionResult> {
+    try {
+      assertValidHederaAccountId(accountId);
+      
+      const accountPrivateKey = this.validateAndParsePrivateKey(privateKey);
+      const tokenIdObj = TokenId.fromString(tokenId);
+      
+      const associateTransaction = new TokenAssociateTransaction()
+        .setAccountId(AccountId.fromString(accountId))
+        .setTokenIds([tokenIdObj])
+        .setTransactionId(TransactionId.generate(AccountId.fromString(accountId)));
+
+      const frozen = await associateTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(accountPrivateKey);
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Token association successful', { accountId, tokenId });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Token association failed', { accountId, tokenId, status: receipt.status });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token association failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Token association error', { accountId, tokenId, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Mint tokens to an account
+   */
+  async mintToken(tokenId: string, amount: number, supplyKey: string, toAccountId?: string): Promise<HederaTransactionResult> {
+    try {
+      const tokenIdObj = TokenId.fromString(tokenId);
+      const supplyKeyObj = PrivateKey.fromString(supplyKey);
+  
+      const mintTransaction = await new TokenMintTransaction()
+        .setTokenId(tokenIdObj)
+        .setAmount(amount)
+        .freezeWith(this.client);
+  
+      // Sign with supply key
+      const signedTx = await mintTransaction.sign(supplyKeyObj);
+  
+      // Execute (client will add operator signature automatically as payer)
+      const response = await signedTx.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+  
+      if (receipt.status === Status.Success) {
+        // If toAccountId is specified and different from treasury, transfer tokens to that account
+        if (toAccountId && toAccountId !== this.operatorId.toString()) {
+          logger.info('Transferring minted tokens to target account', {
+            tokenId,
+            amount,
+            fromAccountId: this.operatorId.toString(),
+            toAccountId
+          });
+          
+          const transferResult = await this.transferToken(
+            tokenId, 
+            this.operatorId.toString(), 
+            toAccountId, 
+            amount, 
+            this.operatorKey.toString()
+          );
+          
+          if (transferResult.status !== 'SUCCESS') {
+            logger.error('Failed to transfer minted tokens to target account', {
+              tokenId,
+              amount,
+              toAccountId,
+              transferError: transferResult.message
+            });
+            return {
+              transactionId: response.transactionId.toString(),
+              status: 'FAILED',
+              message: `Token minted but transfer to target account failed: ${transferResult.message}`
+            };
+          }
+          
+          logger.info('Successfully transferred minted tokens to target account', {
+            tokenId,
+            amount,
+            toAccountId,
+            transferTransactionId: transferResult.transactionId
+          });
+        }
+        
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS',
+        };
+      } else {
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token mint failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+  
+  /**
+   * Burn tokens from an account
+   */
+  async burnToken(tokenId: string, amount: number, fromAccountId: string, supplyKey: string, fromAccountPrivateKey?: string): Promise<HederaTransactionResult> {
+    try {
+      assertValidHederaAccountId(fromAccountId);
+      
+      const supplyKeyObj = this.validateAndParsePrivateKey(supplyKey);
+      const tokenIdObj = TokenId.fromString(tokenId);
+      
+      // If burning from a different account than treasury, we need to transfer to treasury first
+      if (fromAccountId !== this.operatorId.toString()) {
+        logger.info('Transferring tokens to treasury before burning', {
+          tokenId,
+          amount,
+          fromAccountId,
+          treasuryAccount: this.operatorId.toString()
+        });
+        
+        // First, transfer tokens from the account to treasury
+        if (!fromAccountPrivateKey) {
+          return {
+            transactionId: '',
+            status: 'FAILED',
+            message: 'Account private key required to transfer tokens for burning'
+          };
+        }
+        
+        const transferResult = await this.transferToken(
+          tokenId,
+          fromAccountId,
+          this.operatorId.toString(),
+          amount,
+          fromAccountPrivateKey
+        );
+        
+        if (transferResult.status !== 'SUCCESS') {
+          logger.error('Failed to transfer tokens to treasury for burning', {
+            tokenId,
+            amount,
+            fromAccountId,
+            transferError: transferResult.message
+          });
+          return {
+            transactionId: '',
+            status: 'FAILED',
+            message: `Failed to transfer tokens to treasury for burning: ${transferResult.message}`
+          };
+        }
+        
+        logger.info('Successfully transferred tokens to treasury for burning', {
+          tokenId,
+          amount,
+          fromAccountId,
+          transferTransactionId: transferResult.transactionId
+        });
+      }
+      
+      // Now burn from treasury
+      const burnTransaction = new TokenBurnTransaction()
+        .setTokenId(tokenIdObj)
+        .setAmount(amount);
+
+      const frozen = await burnTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(supplyKeyObj);
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Token burn successful', { tokenId, amount, fromAccountId });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Token burn failed', { tokenId, amount, fromAccountId, status: receipt.status });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token burn failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Token burn error', { tokenId, amount, fromAccountId, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Transfer tokens between accounts
+   */
+  async transferToken(
+    tokenId: string, 
+    fromAccountId: string, 
+    toAccountId: string, 
+    amount: number, 
+    fromPrivateKey: string
+  ): Promise<HederaTransactionResult> {
+    try {
+      assertValidHederaAccountId(fromAccountId);
+      assertValidHederaAccountId(toAccountId);
+      
+      const accountPrivateKey = this.validateAndParsePrivateKey(fromPrivateKey);
+      const tokenIdObj = TokenId.fromString(tokenId);
+      
+      const transferTransaction = new TransferTransaction()
+        .addTokenTransfer(tokenIdObj, AccountId.fromString(fromAccountId), -amount)
+        .addTokenTransfer(tokenIdObj, AccountId.fromString(toAccountId), amount)
+        .setTransactionId(TransactionId.generate(AccountId.fromString(fromAccountId)));
+
+      const frozen = await transferTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(accountPrivateKey);
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Token transfer successful', { tokenId, fromAccountId, toAccountId, amount });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Token transfer failed', { tokenId, fromAccountId, toAccountId, amount, status: receipt.status });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token transfer failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Token transfer error', { tokenId, fromAccountId, toAccountId, amount, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 

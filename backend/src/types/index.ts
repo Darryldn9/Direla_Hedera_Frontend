@@ -55,6 +55,7 @@ export interface PaymentRequest {
   fromCurrency?: string; // Optional: defaults to sender's preferred currency
   toCurrency?: string; // Optional: defaults to receiver's preferred currency
   quoteId?: string; // Optional: for quote-based payments
+  quote?: CurrencyQuote; // Required: payment quote for currency validation and token calculations
 }
 
 // Hedera related types
@@ -62,6 +63,10 @@ export interface HederaConfig {
   accountId: string;
   privateKey: string;
   network: 'testnet' | 'mainnet';
+  usdTokenId?: string;
+  usdSupplyKey?: string;
+  zarTokenId?: string;
+  zarSupplyKey?: string;
 }
 
 export interface HederaTransactionResult {
@@ -160,6 +165,10 @@ export interface HederaService {
   processPayment(paymentRequest: PaymentRequest): Promise<HederaTransactionResult>;
   getTransactionHistory(accountId: string, limit?: number): Promise<TransactionHistoryItem[]>;
   generatePaymentQuote(fromAccountId: string, toAccountId: string, amount: number, fromCurrency?: string, toCurrency?: string): Promise<CurrencyQuote>;
+  associateToken(accountId: string, tokenId: string, privateKey: string): Promise<HederaTransactionResult>;
+  mintToken(tokenId: string, amount: number, toAccountId?: string): Promise<HederaTransactionResult>;
+  burnToken(tokenId: string, amount: number, fromAccountId: string, privateKey: string): Promise<HederaTransactionResult>;
+  transferToken(tokenId: string, fromAccountId: string, toAccountId: string, amount: number, fromPrivateKey: string): Promise<HederaTransactionResult>;
 }
 
 export interface ExternalApiService {

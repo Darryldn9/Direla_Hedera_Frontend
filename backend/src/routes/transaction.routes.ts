@@ -9,6 +9,10 @@ export interface ProcessPaymentWithDIDRequest {
   amount: number;
   memo?: string;
   merchant_user_id?: string; // Optional: if provided, will log to DID
+  fromCurrency?: string;
+  toCurrency?: string;
+  quoteId?: string;
+  quote?: import('../types/index.js').CurrencyQuote;
 }
 
 export class TransactionRoutes {
@@ -105,7 +109,11 @@ export class TransactionRoutes {
         toAccountId, 
         amount, 
         memo, 
-        merchant_user_id 
+        merchant_user_id,
+        fromCurrency,
+        toCurrency,
+        quoteId,
+        quote
       }: ProcessPaymentWithDIDRequest = req.body;
 
       // Validate required fields
@@ -130,7 +138,10 @@ export class TransactionRoutes {
         toAccountId, 
         amount, 
         memo,
-        merchant_user_id 
+        merchant_user_id,
+        fromCurrency,
+        toCurrency,
+        hasQuote: !!quote
       });
 
       // Process the Hedera payment first
@@ -138,7 +149,11 @@ export class TransactionRoutes {
         fromAccountId,
         toAccountId,
         amount,
-        ...(memo && { memo })
+        ...(memo && { memo }),
+        ...(fromCurrency && { fromCurrency }),
+        ...(toCurrency && { toCurrency }),
+        ...(quoteId && { quoteId }),
+        ...(quote && { quote })
       };
       
       const hederaResult = await this.hederaService.processPayment(paymentRequest);

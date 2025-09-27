@@ -11,6 +11,8 @@ import {
 } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { cacheGet, cacheSet, cacheKeys, cacheDel } from '../utils/redis.js';
+import { config } from '../config/index.js';
+import { toBaseUnits, fromBaseUnits } from '../utils/token-amount.js';
 
 export class HederaServiceImpl implements HederaService {
   private hederaInfra: HederaInfrastructure;
@@ -111,7 +113,7 @@ export class HederaServiceImpl implements HederaService {
 
   async processPayment(paymentRequest: PaymentRequest): Promise<HederaTransactionResult> {
     try {
-      const { fromAccountId, toAccountId, amount, memo, fromCurrency, toCurrency } = paymentRequest;
+      const { fromAccountId, toAccountId, amount, memo, fromCurrency, toCurrency, quote } = paymentRequest;
       
       logger.info('Processing payment', { 
         fromAccountId, 
@@ -119,12 +121,27 @@ export class HederaServiceImpl implements HederaService {
         amount, 
         memo,
         fromCurrency,
-        toCurrency
+        toCurrency,
+        hasQuote: !!quote
       });
 
       // Validate accounts exist in our database
+      logger.info('Retrieving accounts from database', {
+        fromAccountId,
+        toAccountId
+      });
+      
       const fromAccount = await this.hederaAccountService.getAccountByAccountId(fromAccountId);
       const toAccount = await this.hederaAccountService.getAccountByAccountId(toAccountId);
+
+      logger.info('Account retrieval results', {
+        fromAccountId,
+        fromAccountFound: !!fromAccount,
+        fromAccountActive: fromAccount?.is_active,
+        toAccountId,
+        toAccountFound: !!toAccount,
+        toAccountActive: toAccount?.is_active
+      });
 
       if (!fromAccount) {
         throw new Error(`From account ${fromAccountId} not found in database`);
@@ -152,21 +169,86 @@ export class HederaServiceImpl implements HederaService {
         throw new Error('Cannot transfer to the same account');
       }
 
-      // Determine currencies - use account preferences if not specified
+      // Validate quote if provided
+      if (quote) {
+        logger.info('Validating quote', {
+          quoteId: quote.quoteId,
+          fromCurrency: quote.fromCurrency,
+          toCurrency: quote.toCurrency,
+          fromAmount: quote.fromAmount,
+          toAmount: quote.toAmount,
+          exchangeRate: quote.exchangeRate,
+          expiresAt: new Date(quote.expiresAt).toISOString()
+        });
+        
+        // Validate quote expiry
+        const now = Date.now();
+        if (now > quote.expiresAt) {
+          throw new Error(`Quote expired. Quote expired at ${new Date(quote.expiresAt).toISOString()}, current time: ${new Date(now).toISOString()}`);
+        }
+
+        // Validate quote matches payment request
+        if (quote.fromCurrency !== fromCurrency || quote.toCurrency !== toCurrency) {
+          throw new Error(`Quote currency mismatch. Expected ${fromCurrency}->${toCurrency}, got ${quote.fromCurrency}->${quote.toCurrency}`);
+        }
+
+        if (Math.abs(quote.toAmount - amount) > 0.01) { // Allow small floating point differences
+          throw new Error(`Quote amount mismatch. Expected ${amount}, got ${quote.toAmount}`);
+        }
+
+        logger.info('Quote validation passed', {
+          quoteId: quote.quoteId,
+          fromCurrency: quote.fromCurrency,
+          toCurrency: quote.toCurrency,
+          fromAmount: quote.toAmount,
+          toAmount: quote.toAmount,
+          exchangeRate: quote.exchangeRate,
+          expiresAt: new Date(quote.expiresAt).toISOString()
+        });
+      }
+
+      // Determine currencies - use quote if available, otherwise account preferences
       const senderCurrency = fromCurrency || fromAccount.preferred_currency || 'HBAR';
       const receiverCurrency = toCurrency || toAccount.preferred_currency || 'HBAR';
 
       logger.info('Currency conversion details', {
         senderCurrency,
         receiverCurrency,
-        originalAmount: amount
+        originalAmount: amount,
+        usingQuote: !!quote
       });
 
-      // Convert amount if currencies are different
+      // Use quote for conversion if available, otherwise convert on-the-fly
       let hbarAmount = amount;
       let conversionDetails = null;
+      let burnAmount = amount; // Amount to burn from sender
+      let mintAmount = amount; // Amount to mint to receiver
 
-      if (senderCurrency !== receiverCurrency) {
+      if (quote) {
+        // Use quote for conversion
+        hbarAmount = quote.toAmount;
+        burnAmount = quote.fromAmount; // Amount to burn in sender's currency
+        mintAmount = quote.toAmount;   // Amount to mint in receiver's currency
+        conversionDetails = {
+          fromCurrency: quote.fromCurrency,
+          toCurrency: quote.toCurrency,
+          fromAmount: quote.fromAmount,
+          toAmount: quote.toAmount,
+          exchangeRate: quote.exchangeRate,
+          timestamp: Date.now()
+        };
+
+        logger.info('Using quote for currency conversion', {
+          fromCurrency: quote.fromCurrency,
+          toCurrency: quote.toCurrency,
+          fromAmount: quote.fromAmount,
+          toAmount: quote.toAmount,
+          burnAmount,
+          mintAmount,
+          exchangeRate: quote.exchangeRate
+        });
+      } else if (senderCurrency !== receiverCurrency) {
+        // Fallback to real-time conversion if no quote
         try {
           const conversionRequest: CurrencyConversionRequest = {
             fromCurrency: senderCurrency,
@@ -176,13 +258,17 @@ export class HederaServiceImpl implements HederaService {
 
           const conversion = await this.externalApi.convertCurrency(conversionRequest);
           hbarAmount = conversion.toAmount;
+          burnAmount = conversion.fromAmount; // Amount to burn in sender's currency
+          mintAmount = conversion.toAmount;   // Amount to mint in receiver's currency
           conversionDetails = conversion;
 
-          logger.info('Currency conversion applied', {
+          logger.info('Real-time currency conversion applied', {
             fromCurrency: conversion.fromCurrency,
             toCurrency: conversion.toCurrency,
             fromAmount: conversion.fromAmount,
             toAmount: conversion.toAmount,
+            burnAmount,
+            mintAmount,
             exchangeRate: conversion.exchangeRate
           });
         } catch (conversionError) {
@@ -196,7 +282,7 @@ export class HederaServiceImpl implements HederaService {
         }
       }
 
-      // Check if this is a quote-based payment and validate expiry
+      // Check if this is a quote-based payment and validate expiry (legacy support)
       if (paymentRequest.quoteId) {
         const quoteExpiry = this.validateQuoteExpiry(paymentRequest.quoteId);
         if (!quoteExpiry.isValid) {
@@ -209,34 +295,239 @@ export class HederaServiceImpl implements HederaService {
       }
 
       // Get current balances from Hedera network
+      logger.info('Retrieving account balances', {
+        fromAccountId,
+        toAccountId
+      });
+      
       const fromBalanceData = await this.hederaAccountService.getAccountBalance(fromAccountId);
       const toBalanceData = await this.hederaAccountService.getAccountBalance(toAccountId);
+      
+      logger.info('Account balances retrieved', {
+        fromAccountId,
+        fromBalanceData,
+        toAccountId,
+        toBalanceData
+      });
 
-      // Extract HBAR balances
-      const fromBalance = fromBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
-      const toBalance = toBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
+      // Determine if we need to handle token operations
+      const fromTokenId = this.getTokenIdForCurrency(senderCurrency);
+      const toTokenId = this.getTokenIdForCurrency(receiverCurrency);
+      
+      let result: HederaTransactionResult;
+      let tokenOperations: { burn?: HederaTransactionResult; mint?: HederaTransactionResult } = {};
 
-      // Check sufficient balance (always in HBAR for Hedera network)
-      if (fromBalance < hbarAmount) {
-        throw new Error(`Insufficient balance. Available: ${fromBalance} HBAR, Required: ${hbarAmount} HBAR`);
+      if (fromTokenId && toTokenId && fromTokenId !== toTokenId) {
+        // Cross-currency payment with different tokens - burn from sender, mint to receiver
+        logger.info('Processing cross-currency payment with token burn/mint', {
+          fromCurrency: senderCurrency,
+          toCurrency: receiverCurrency,
+          fromTokenId,
+          toTokenId,
+          amount,
+          hbarAmount
+        });
+
+        // Check sender has sufficient tokens
+        const fromTokenBalanceBaseUnits = fromBalanceData.find(b => b.code === senderCurrency)?.amount || 0;
+        const fromTokenBalance = fromBaseUnits(fromTokenBalanceBaseUnits, senderCurrency);
+        logger.info('Token balance check', {
+          senderCurrency,
+          fromTokenBalanceBaseUnits,
+          fromTokenBalance,
+          requiredAmount: burnAmount,
+          hasSufficientBalance: fromTokenBalance >= burnAmount
+        });
+        
+        if (fromTokenBalance < burnAmount) {
+          throw new Error(`Insufficient ${senderCurrency} balance. Available: ${fromTokenBalance}, Required: ${burnAmount}`);
+        }
+
+        // Burn tokens from sender
+        logger.info('Attempting to burn tokens', {
+          fromTokenId,
+          burnAmount,
+          fromAccountId,
+          senderCurrency
+        });
+        
+        try {
+          const burnResult = await this.burnToken(fromTokenId, burnAmount, fromAccountId, senderCurrency, (fromAccount as any).private_key);
+          if (burnResult.status !== 'SUCCESS') {
+            logger.error('Token burn failed', {
+              fromTokenId,
+              burnAmount,
+              fromAccountId,
+              burnResult
+            });
+            throw new Error(`Token burn failed: ${burnResult.message}`);
+          }
+          tokenOperations.burn = burnResult;
+        } catch (burnError) {
+          logger.error('Token burn operation failed', {
+            fromTokenId,
+            amount,
+            fromAccountId,
+            error: burnError instanceof Error ? burnError.message : String(burnError)
+          });
+          throw new Error(`Token burn operation failed: ${burnError instanceof Error ? burnError.message : 'Unknown error'}`);
+        }
+
+        // Ensure receiver account is associated with the token before minting
+        logger.info('Ensuring token association for receiver', {
+          toTokenId,
+          toAccountId
+        });
+        
+        try {
+          const associateResult = await this.associateToken(toAccountId, toTokenId, (toAccount as any).private_key);
+          if (associateResult.status !== 'SUCCESS' && !associateResult.message?.toLowerCase().includes('already associated')) {
+            logger.warn('Token association failed, but continuing with mint attempt', {
+              toTokenId,
+              toAccountId,
+              associateError: associateResult.message
+            });
+          } else {
+            logger.info('Token association successful', {
+              toTokenId,
+              toAccountId
+            });
+          }
+        } catch (associateError) {
+          logger.warn('Token association error, but continuing with mint attempt', {
+            toTokenId,
+            toAccountId,
+            error: associateError instanceof Error ? associateError.message : String(associateError)
+          });
+        }
+
+        // Mint tokens to receiver
+        logger.info('Attempting to mint tokens', {
+          toTokenId,
+          mintAmount,
+          toAccountId,
+          receiverCurrency
+        });
+        
+        try {
+          const mintResult = await this.mintToken(toTokenId, mintAmount, receiverCurrency, toAccountId);
+          if (mintResult.status !== 'SUCCESS') {
+            // If mint fails, attempt to refund the burned tokens
+            logger.error('Token mint failed after successful burn - attempting refund', {
+              burnTransactionId: tokenOperations.burn?.transactionId,
+              mintError: mintResult.message,
+              mintResult
+            });
+            
+            try {
+              await this.attemptRefundBurnedTokens(fromTokenId, burnAmount, fromAccountId, senderCurrency);
+              logger.info('Successfully refunded burned tokens', {
+                fromTokenId,
+                burnAmount,
+                fromAccountId
+              });
+            } catch (refundError) {
+              logger.error('Failed to refund burned tokens - tokens may be lost', {
+                fromTokenId,
+                burnAmount,
+                fromAccountId,
+                refundError: refundError instanceof Error ? refundError.message : String(refundError)
+              });
+            }
+            
+            throw new Error(`Token mint failed: ${mintResult.message}`);
+          }
+          tokenOperations.mint = mintResult;
+        } catch (mintError) {
+          logger.error('Token mint operation failed', {
+            toTokenId,
+            hbarAmount,
+            toAccountId,
+            error: mintError instanceof Error ? mintError.message : String(mintError)
+          });
+          
+          // Attempt refund if this was a cross-currency payment
+          if (fromTokenId && toTokenId && fromTokenId !== toTokenId) {
+            try {
+              await this.attemptRefundBurnedTokens(fromTokenId, burnAmount, fromAccountId, senderCurrency);
+              logger.info('Successfully refunded burned tokens after mint failure', {
+                fromTokenId,
+                burnAmount,
+                fromAccountId
+              });
+            } catch (refundError) {
+              logger.error('Failed to refund burned tokens after mint failure - tokens may be lost', {
+                fromTokenId,
+                burnAmount,
+                fromAccountId,
+                refundError: refundError instanceof Error ? refundError.message : String(refundError)
+              });
+            }
+          }
+          
+          throw new Error(`Token mint operation failed: ${mintError instanceof Error ? mintError.message : 'Unknown error'}`);
+        }
+
+        result = {
+          transactionId: `${tokenOperations.burn?.transactionId},${tokenOperations.mint?.transactionId}`,
+          status: 'SUCCESS',
+          message: 'Cross-currency payment processed with token burn/mint'
+        };
+
+      } else if (fromTokenId && toTokenId && fromTokenId === toTokenId) {
+        // Same currency token transfer
+        logger.info('Processing same-currency token transfer', {
+          currency: senderCurrency,
+          tokenId: fromTokenId,
+          amount
+        });
+
+        // Check sender has sufficient tokens
+        const fromTokenBalanceBaseUnits = fromBalanceData.find(b => b.code === senderCurrency)?.amount || 0;
+        const fromTokenBalance = fromBaseUnits(fromTokenBalanceBaseUnits, senderCurrency);
+        if (fromTokenBalance < amount) {
+          throw new Error(`Insufficient ${senderCurrency} balance. Available: ${fromTokenBalance}, Required: ${amount}`);
+        }
+
+        // Transfer tokens directly
+        result = await this.transferToken(fromTokenId, fromAccountId, toAccountId, amount, (fromAccount as any).private_key, senderCurrency);
+
+      } else {
+        // HBAR transfer (fallback)
+        logger.info('Processing HBAR transfer', {
+          fromAccountId,
+          toAccountId,
+          hbarAmount
+        });
+
+        // Extract HBAR balances
+        const fromBalance = fromBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
+        const toBalance = toBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
+
+        // Check sufficient balance
+        if (fromBalance < hbarAmount) {
+          throw new Error(`Insufficient HBAR balance. Available: ${fromBalance} HBAR, Required: ${hbarAmount} HBAR`);
+        }
+
+        // Execute the HBAR transfer
+        result = await (this.hederaInfra as any).transferHbarFromAccount(
+          fromAccountId,
+          (fromAccount as any).private_key,
+          toAccountId,
+          hbarAmount
+        );
+
+        if (result.status === 'SUCCESS') {
+          // Update HBAR balances in our database
+          const newFromBalance = fromBalance - hbarAmount;
+          const newToBalance = toBalance + hbarAmount;
+          
+          await this.hederaAccountService.updateAccountBalance(fromAccountId, newFromBalance);
+          await this.hederaAccountService.updateAccountBalance(toAccountId, newToBalance);
+        }
       }
 
-      // Execute the transfer, signed by the sender's key to avoid INVALID_SIGNATURE
-      const result = await (this.hederaInfra as any).transferHbarFromAccount(
-        fromAccountId,
-        (fromAccount as any).private_key,
-        toAccountId,
-        hbarAmount
-      );
-
       if (result.status === 'SUCCESS') {
-        // Update balances in our database (always in HBAR)
-        const newFromBalance = fromBalance - hbarAmount;
-        const newToBalance = toBalance + hbarAmount;
-        
-        await this.hederaAccountService.updateAccountBalance(fromAccountId, newFromBalance);
-        await this.hederaAccountService.updateAccountBalance(toAccountId, newToBalance);
-
         // Invalidate caches for balances and transactions
         await Promise.all([
           cacheDel(cacheKeys.balance(fromAccountId)),
@@ -249,15 +540,18 @@ export class HederaServiceImpl implements HederaService {
           fromAccountId, 
           toAccountId, 
           amount,
+          senderCurrency,
+          receiverCurrency,
           transactionId: result.transactionId,
-          newFromBalance,
-          newToBalance
+          tokenOperations: Object.keys(tokenOperations).length > 0 ? tokenOperations : undefined
         });
       } else {
         logger.error('Payment failed', { 
           fromAccountId, 
           toAccountId, 
           amount,
+          senderCurrency,
+          receiverCurrency,
           transactionId: result.transactionId,
           message: result.message
         });
@@ -267,7 +561,8 @@ export class HederaServiceImpl implements HederaService {
     } catch (error) {
       logger.error('Payment processing error', { 
         paymentRequest, 
-        error 
+        error: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined
       });
       
       return {
@@ -445,6 +740,163 @@ export class HederaServiceImpl implements HederaService {
     } catch (error) {
       logger.error('Quote validation error', { quoteId, error });
       return { isValid: false, message: 'Quote validation failed' };
+    }
+  }
+
+  async associateToken(accountId: string, tokenId: string, privateKey: string): Promise<HederaTransactionResult> {
+    return await this.hederaInfra.associateToken(accountId, tokenId, privateKey);
+  }
+
+  async mintToken(tokenId: string, amount: number, currency: string, toAccountId?: string): Promise<HederaTransactionResult> {
+    const supplyKey = this.getSupplyKeyForCurrency(currency);
+    if (!supplyKey) {
+      logger.error('Supply key not configured for currency', {
+        currency,
+        tokenId,
+        toAccountId,
+        usdSupplyKeyConfigured: !!config.hedera.usdSupplyKey,
+        zarSupplyKeyConfigured: !!config.hedera.zarSupplyKey
+      });
+      throw new Error(`No supply key configured for currency: ${currency}. Please set ${currency}_SUPPLY_KEY environment variable.`);
+    }
+    
+    // Convert display amount to base units for minting
+    const baseUnits = toBaseUnits(amount, currency);
+    
+    logger.debug('Minting token with supply key', {
+      tokenId,
+      displayAmount: amount,
+      baseUnits,
+      currency,
+      toAccountId,
+      supplyKeyLength: supplyKey?.length || 0,
+      supplyKeyPrefix: supplyKey?.substring(0, 10) || 'undefined'
+    });
+    
+    return await this.hederaInfra.mintToken(tokenId, baseUnits, supplyKey, toAccountId);
+  }
+
+  async burnToken(tokenId: string, amount: number, fromAccountId: string, currency: string, fromAccountPrivateKey?: string): Promise<HederaTransactionResult> {
+    const supplyKey = this.getSupplyKeyForCurrency(currency);
+    if (!supplyKey) {
+      throw new Error(`No supply key configured for currency: ${currency}`);
+    }
+    
+    // Convert display amount to base units for burning
+    const baseUnits = toBaseUnits(amount, currency);
+    
+    logger.debug('Burning token', {
+      tokenId,
+      displayAmount: amount,
+      baseUnits,
+      currency,
+      fromAccountId
+    });
+    
+    return await this.hederaInfra.burnToken(tokenId, baseUnits, fromAccountId, supplyKey, fromAccountPrivateKey);
+  }
+
+  async transferToken(tokenId: string, fromAccountId: string, toAccountId: string, amount: number, fromPrivateKey: string, currency?: string): Promise<HederaTransactionResult> {
+    // Convert display amount to base units for transfer if currency is provided
+    const transferAmount = currency ? toBaseUnits(amount, currency) : amount;
+    
+    logger.debug('Transferring token', {
+      tokenId,
+      displayAmount: amount,
+      transferAmount,
+      currency,
+      fromAccountId,
+      toAccountId
+    });
+    
+    return await this.hederaInfra.transferToken(tokenId, fromAccountId, toAccountId, transferAmount, fromPrivateKey);
+  }
+
+  /**
+   * Get token ID for a given currency code
+   */
+  private getTokenIdForCurrency(currency: string): string | null {
+    const tokenMap: Record<string, string | null> = {
+      'USD': config.hedera.usdTokenId || '0.0.6916971',
+      'ZAR': config.hedera.zarTokenId || '0.0.6916972',
+      'HBAR': null // HBAR doesn't have a token ID
+    };
+    
+    return tokenMap[currency] || null;
+  }
+
+  /**
+   * Get supply key for a given currency code
+   */
+  private getSupplyKeyForCurrency(currency: string): string | null {
+    const supplyKeyMap: Record<string, string | null> = {
+      'USD': config.hedera.usdSupplyKey || null,
+      'ZAR': config.hedera.zarSupplyKey || null,
+      'HBAR': null // HBAR doesn't have a supply key
+    };
+    
+    const supplyKey = supplyKeyMap[currency] || null;
+    
+    logger.debug('Supply key lookup', {
+      currency,
+      hasUsdSupplyKey: !!config.hedera.usdSupplyKey,
+      hasZarSupplyKey: !!config.hedera.zarSupplyKey,
+      foundSupplyKey: !!supplyKey,
+      supplyKeyLength: supplyKey?.length || 0,
+      usdSupplyKeyPrefix: config.hedera.usdSupplyKey?.substring(0, 10) || 'undefined',
+      zarSupplyKeyPrefix: config.hedera.zarSupplyKey?.substring(0, 10) || 'undefined'
+    });
+    
+    return supplyKey;
+  }
+
+  /**
+   * Attempt to refund burned tokens by minting them back to the original account
+   * This is used as a recovery mechanism when minting to the destination fails
+   */
+  private async attemptRefundBurnedTokens(
+    tokenId: string, 
+    amount: number, 
+    accountId: string, 
+    currency: string
+  ): Promise<HederaTransactionResult> {
+    logger.info('Attempting to refund burned tokens', {
+      tokenId,
+      amount,
+      accountId,
+      currency
+    });
+
+    try {
+      // Mint the tokens back to the original account
+      const refundResult = await this.mintToken(tokenId, amount, currency, accountId);
+      
+      if (refundResult.status === 'SUCCESS') {
+        logger.info('Successfully refunded burned tokens', {
+          tokenId,
+          amount,
+          accountId,
+          refundTransactionId: refundResult.transactionId
+        });
+      } else {
+        logger.error('Failed to refund burned tokens', {
+          tokenId,
+          amount,
+          accountId,
+          refundError: refundResult.message
+        });
+      }
+      
+      return refundResult;
+    } catch (error) {
+      logger.error('Exception during token refund attempt', {
+        tokenId,
+        amount,
+        accountId,
+        currency,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
     }
   }
 }

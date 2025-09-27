@@ -21,7 +21,7 @@ import { usePaymentManager } from '../../hooks/usePayments';
 import { usePaymentPollingWithToast } from '../../hooks/usePaymentPollingWithToast';
 import { useToast } from '../../hooks/useToast';
 import { useQuote } from '../../hooks/useQuote';
-import { ProcessPaymentWithDIDRequest } from '../../types/api';
+import { CurrencyQuote, ProcessPaymentWithDIDRequest } from '../../types/api';
 import {
   QrCode,
   MessageCircle,
@@ -179,7 +179,7 @@ export default function PayScreen() {
   const onPaymentSuccess = (amountReceived: number) => {
     showSuccess(
       'Payment Received!',
-      `Successfully received ${amountReceived.toFixed(2)} HBAR`,
+      `Successfully received ${amountReceived.toFixed(2)} ${receiverCurrency}`,
       5000
     );
     setAmount('');
@@ -349,7 +349,7 @@ export default function PayScreen() {
     const toCurrency = paymentData.currency;
     
     // Check if currencies are different and fetch quote if needed
-    let quoteId: string | undefined;
+    let quote: CurrencyQuote | null = null;
     if (fromCurrency.toUpperCase() !== toCurrency.toUpperCase()) {
       showInfo(
         'Getting Quote',
@@ -358,7 +358,7 @@ export default function PayScreen() {
       );
       
       try {
-        const quote = await generateQuote({
+        quote = await generateQuote({
           fromAccountId: selectedAccount.account_id,
           toAccountId: paymentData.toAccountId,
           amount: paymentData.amount,
@@ -368,7 +368,6 @@ export default function PayScreen() {
         
         if (quote) {
           console.log("[DEBUG] QUOTE", quote);
-          quoteId = quote.quoteId;
           showInfo(
             'Quote Received',
             `Exchange rate: 1 ${fromCurrency} = ${quote.exchangeRate.toFixed(4)} ${toCurrency}\nYou will send: ${quote.fromAmount.toFixed(2)} ${fromCurrency}\nRecipient will receive: ${quote.toAmount.toFixed(2)} ${toCurrency}`,
@@ -398,9 +397,9 @@ export default function PayScreen() {
         amount: paymentData.amount,
         memo: paymentData.memo || `Payment to ${paymentData.accountAlias || paymentData.toAccountId}`,
         merchant_user_id: paymentData.merchant_user_id,
-        fromCurrency,
-        toCurrency,
-        quoteId
+        fromCurrency: fromCurrency,
+        toCurrency: toCurrency,
+        quote: quote || undefined
       };
 
       // Process the payment

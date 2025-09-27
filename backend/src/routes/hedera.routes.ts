@@ -176,7 +176,7 @@ export class HederaRoutes {
    */
   private async processPayment(req: Request, res: Response): Promise<void> {
     try {
-      const { fromAccountId, toAccountId, amount, memo } = req.body;
+      const { fromAccountId, toAccountId, amount, memo, fromCurrency, toCurrency, quote } = req.body;
       
       // Validate required fields
       if (!fromAccountId || !toAccountId || amount === undefined) {
@@ -195,18 +195,45 @@ export class HederaRoutes {
         return;
       }
 
+      // Validate quote if provided
+      if (quote) {
+        if (!quote.fromCurrency || !quote.toCurrency || !quote.fromAmount || !quote.toAmount || !quote.exchangeRate || !quote.expiresAt || !quote.quoteId) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid quote format. Required fields: fromCurrency, toCurrency, fromAmount, toAmount, exchangeRate, expiresAt, quoteId'
+          });
+          return;
+        }
+
+        // Validate quote expiry
+        const now = Date.now();
+        if (now > quote.expiresAt) {
+          res.status(400).json({
+            success: false,
+            error: `Quote expired. Quote expired at ${new Date(quote.expiresAt).toISOString()}, current time: ${new Date(now).toISOString()}`
+          });
+          return;
+        }
+      }
+
       logger.info('POST /hedera/payment - Processing payment', { 
         fromAccountId, 
         toAccountId, 
         amount, 
-        memo 
+        memo,
+        fromCurrency,
+        toCurrency,
+        hasQuote: !!quote
       });
       
       const result = await this.hederaService.processPayment({
         fromAccountId,
         toAccountId,
         amount,
-        memo
+        memo,
+        fromCurrency,
+        toCurrency,
+        quote
       });
       
       if (result.status === 'SUCCESS') {
