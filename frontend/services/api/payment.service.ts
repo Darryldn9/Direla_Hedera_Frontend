@@ -175,13 +175,13 @@ export class PaymentService extends BaseApiService {
     if (paymentData.fromAccountId && paymentData.amount > 0) {
       try {
         const balanceResponse = await this.getAccountBalance(paymentData.fromAccountId);
-        if (balanceResponse.success && balanceResponse.data) {
-          if (balanceResponse.data.balance < paymentData.amount) {
-            errors.push('Insufficient balance');
-          } else if (balanceResponse.data.balance < paymentData.amount * 1.1) {
-            warnings.push('Low balance warning - consider adding more funds');
-          }
-        }
+        // if (balanceResponse.success && balanceResponse.data) {
+        //   if (balanceResponse.data?.balances.find(b => b.code === 'HBAR')?.amount ?? 0 < paymentData.amount) {
+        //     errors.push('Insufficient balance');
+        //   } else if (balanceResponse.data?.balances.find(b => b.code === 'HBAR')?.amount ?? 0 < paymentData.amount * 1.1) {
+        //     warnings.push('Low balance warning - consider adding more funds');
+        //   }
+        // }
       } catch (error) {
         warnings.push('Could not verify account balance');
       }

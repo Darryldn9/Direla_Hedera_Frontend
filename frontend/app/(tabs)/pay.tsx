@@ -345,12 +345,12 @@ export default function PayScreen() {
     setIsProcessingPayment(true);
     
     // Determine currencies
-    const fromCurrency = paymentData.fromCurrency || selectedAccount.currency || 'HBAR';
-    const toCurrency = paymentData.toCurrency || paymentData.currency;
+    const fromCurrency = selectedAccount.currency;
+    const toCurrency = paymentData.currency;
     
     // Check if currencies are different and fetch quote if needed
     let quoteId: string | undefined;
-    if (fromCurrency !== toCurrency) {
+    if (fromCurrency.toUpperCase() !== toCurrency.toUpperCase()) {
       showInfo(
         'Getting Quote',
         `Fetching exchange rate for ${fromCurrency} to ${toCurrency}...`,
@@ -367,6 +367,7 @@ export default function PayScreen() {
         });
         
         if (quote) {
+          console.log("[DEBUG] QUOTE", quote);
           quoteId = quote.quoteId;
           showInfo(
             'Quote Received',
@@ -411,34 +412,19 @@ export default function PayScreen() {
         // Payment successful - show success toast
         showSuccess(
           'Payment Successful!',
-          `${paymentData.amount.toFixed(2)} ${paymentData.currency} sent successfully\nTransaction ID: ${result.transactionId}`,
+          `${paymentData.amount.toFixed(2)} ${paymentData.currency} sent to ${paymentData.accountAlias || paymentData.toAccountId}\nTransaction ID: ${result.transactionId}`,
           5000
         );
         
-        // Also show the detailed alert
-        Alert.alert(
-          'Payment Successful!',
-          `${paymentData.amount.toFixed(2)} ${paymentData.currency} sent to ${paymentData.accountAlias || paymentData.toAccountId}\n\nTransaction ID: ${result.transactionId}\n\nTransaction processed on Hedera Hashgraph for instant settlement.`,
-          [
-            { text: 'OK', onPress: () => {
-              setPaymentMethod(null);
-              setRecipient('');
-            }}
-          ]
-        );
+        // Reset form state
+        setPaymentMethod(null);
+        setRecipient('');
       } else {
         // Payment failed - show error toast
         showError(
           'Payment Failed',
           result?.error || 'Unknown error occurred while processing payment.',
           5000
-        );
-        
-        // Also show the detailed alert
-        Alert.alert(
-          'Payment Failed',
-          result?.error || 'Unknown error occurred while processing payment.',
-          [{ text: 'OK' }]
         );
       }
     } catch (error) {
@@ -449,13 +435,6 @@ export default function PayScreen() {
         'Payment Error',
         'An error occurred while processing the payment. Please try again.',
         5000
-      );
-      
-      // Also show the detailed alert
-      Alert.alert(
-        'Payment Error',
-        'An error occurred while processing the payment. Please try again.',
-        [{ text: 'OK' }]
       );
     } finally {
       setIsProcessingPayment(false);
@@ -519,30 +498,15 @@ export default function PayScreen() {
           5000
         );
         
-        // Also show the detailed alert
-        Alert.alert(
-          'Payment Successful!',
-          `Payment sent via ${paymentMethod.toUpperCase()}\n\nTransaction ID: ${result.transactionId}\n\nTransaction processed on Hedera Hashgraph for instant settlement.`,
-          [
-            { text: 'OK', onPress: () => {
-              setRecipient('');
-              setPaymentMethod(null);
-            }}
-          ]
-        );
+        // Reset form state
+        setRecipient('');
+        setPaymentMethod(null);
       } else {
         // Payment failed - show error toast
         showError(
           'Payment Failed',
           result?.error || 'Unknown error occurred while processing payment.',
           5000
-        );
-        
-        // Also show the detailed alert
-        Alert.alert(
-          'Payment Failed',
-          result?.error || 'Unknown error occurred while processing payment.',
-          [{ text: 'OK' }]
         );
       }
     } catch (error) {
@@ -553,13 +517,6 @@ export default function PayScreen() {
         'Payment Error',
         'An error occurred while processing the payment. Please try again.',
         5000
-      );
-      
-      // Also show the detailed alert
-      Alert.alert(
-        'Payment Error',
-        'An error occurred while processing the payment. Please try again.',
-        [{ text: 'OK' }]
       );
     } finally {
       setIsProcessingPayment(false);
@@ -593,7 +550,7 @@ export default function PayScreen() {
             });
             
             if (quote) {
-              confirmationMessage = `Pay ${paymentData.amount.toFixed(2)} ${paymentData.currency} to ${paymentData.accountAlias || paymentData.toAccountId}?\n\nExchange Rate: 1 ${fromCurrency} = ${quote.exchangeRate.toFixed(4)} ${toCurrency}\nYou will send: ${quote.fromAmount.toFixed(2)} ${fromCurrency}\nRecipient will receive: ${quote.toAmount.toFixed(2)} ${toCurrency}`;
+              confirmationMessage = `Pay ${quote.fromAmount.toFixed(2)} ${quote.fromCurrency} to ${paymentData.accountAlias || paymentData.toAccountId}?`;
             }
           } catch (error) {
             console.error('Failed to fetch quote:', error);

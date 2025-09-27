@@ -151,10 +151,10 @@ export class ExternalApiInfrastructure {
 
     // Simulate exchange rates (in production, fetch from real API)
     const exchangeRates: Record<string, Record<string, number>> = {
-      'USD': { 'HBAR': 0.05, 'EUR': 0.85, 'GBP': 0.73 },
-      'EUR': { 'HBAR': 0.059, 'USD': 1.18, 'GBP': 0.86 },
-      'GBP': { 'HBAR': 0.068, 'USD': 1.37, 'EUR': 1.16 },
-      'HBAR': { 'USD': 20.0, 'EUR': 16.9, 'GBP': 14.7 }
+      'USD': { 'HBAR': 0.05, 'EUR': 0.85, 'GBP': 0.73, 'ZAR': 15.0 },
+      'EUR': { 'HBAR': 0.059, 'USD': 1.18, 'GBP': 0.86, 'ZAR': 18.0 },
+      'GBP': { 'HBAR': 0.068, 'USD': 1.37, 'EUR': 1.16, 'ZAR': 20.0 },
+      'HBAR': { 'USD': 20.0, 'EUR': 16.9, 'GBP': 14.7, 'ZAR': 300.0 }
     };
 
     const fromCurrency = request.fromCurrency.toUpperCase();
@@ -176,13 +176,13 @@ export class ExternalApiInfrastructure {
       throw new Error(`Exchange rate not available for ${fromCurrency} to ${toCurrency}`);
     }
 
-    const toAmount = request.amount * rate;
+    const toAmount = request.amount * (1 / rate);
 
     return {
       fromCurrency,
       toCurrency,
-      fromAmount: request.amount,
-      toAmount: Math.round(toAmount * 100000000) / 100000000, // Round to 8 decimal places
+      fromAmount: toAmount,
+      toAmount: request.amount, // Round to 8 decimal places
       exchangeRate: rate,
       timestamp: Date.now()
     };

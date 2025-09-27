@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useApi } from './useApi';
+import { api } from '../services/api';
 import { CurrencyQuote, GenerateQuoteRequest } from '../types/api';
 
 export interface UseQuoteReturn {
@@ -15,20 +16,20 @@ export const useQuote = (): UseQuoteReturn => {
   const [quote, setQuote] = useState<CurrencyQuote | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { hederaService } = useApi();
+  const generateQuoteApi = useApi<CurrencyQuote>(api.hedera.generateQuote.bind(api.hedera));
 
   const generateQuote = useCallback(async (request: GenerateQuoteRequest): Promise<CurrencyQuote | null> => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await hederaService.generateQuote(request);
+      const result = await generateQuoteApi.execute(request);
       
-      if (response.success && response.data) {
-        setQuote(response.data);
-        return response.data;
+      if (result) {
+        setQuote(result);
+        return result;
       } else {
-        setError(response.error || 'Failed to generate quote');
+        setError(generateQuoteApi.error || 'Failed to generate quote');
         return null;
       }
     } catch (err) {
@@ -38,7 +39,7 @@ export const useQuote = (): UseQuoteReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [hederaService]);
+  }, [generateQuoteApi]);
 
   const clearQuote = useCallback(() => {
     setQuote(null);
