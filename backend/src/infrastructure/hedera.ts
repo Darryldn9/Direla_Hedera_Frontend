@@ -56,17 +56,55 @@ export class HederaInfrastructure {
     }
   }
 
-  async getAccountBalance(accountId: string): Promise<number> {
+  async getAccountBalance(accountId: string): Promise<{ code: string; amount: number }[]> {
     try {
       assertValidHederaAccountId(accountId);
       const query = new AccountBalanceQuery()
         .setAccountId(AccountId.fromString(accountId));
       
       const balance = await query.execute(this.client);
-      const hbarBalance = balance.hbars.toBigNumber().toNumber();
       
-      logger.debug('Account balance retrieved', { accountId, balance: hbarBalance });
-      return hbarBalance;
+      // Define the token IDs for USD and ZAR
+      const USD_TOKEN_ID = '0.0.6869755';
+      const ZAR_TOKEN_ID = '0.0.6889204';
+      
+      // Initialize the balances array with HBAR, USD, and ZAR
+      const balances = [
+        { code: 'HBAR', amount: 0 },
+        { code: 'USD', amount: 0 },
+        { code: 'ZAR', amount: 0 }
+      ];
+      
+      // Get HBAR balance
+      const hbarBalance = balance.hbars.toBigNumber().toNumber();
+      if (balances[0]) {
+        balances[0].amount = hbarBalance;
+      }
+      
+      // Get token balances
+      const tokenBalances = balance.tokens;
+      
+      if (tokenBalances) {
+        for (const [tokenId, balanceAmount] of tokenBalances) {
+          if (tokenId) {
+            const tokenIdString = tokenId.toString();
+            const amount = balanceAmount.toNumber();
+            
+            if (tokenIdString === USD_TOKEN_ID && balances[1]) {
+              balances[1].amount = amount;
+            } else if (tokenIdString === ZAR_TOKEN_ID && balances[2]) {
+              balances[2].amount = amount;
+            }
+          }
+        }
+      }
+      
+      logger.debug('Account balance retrieved', { 
+        accountId, 
+        balances: balances.map(b => `${b.code}: ${b.amount}`).join(', ')
+      });
+      
+      return balances;
     } catch (error) {
       logger.error('Failed to get account balance', { accountId, error });
       throw error;

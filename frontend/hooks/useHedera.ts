@@ -63,9 +63,11 @@ export function useHederaOperations() {
   const refreshAccountBalance = useCallback(async (accountId: string) => {
     const balance = await balances.getAccountBalance.execute(accountId);
     if (balance) {
+      // Extract HBAR balance for backward compatibility
+      const hbarBalance = balance.balances.find(b => b.code === 'HBAR')?.amount || 0;
       setAccountBalances(prev => ({
         ...prev,
-        [accountId]: balance.balance
+        [accountId]: hbarBalance
       }));
     }
     return balance;
@@ -73,7 +75,10 @@ export function useHederaOperations() {
 
   const refreshAllBalances = useCallback(async (accountIds: string[]) => {
     const balancePromises = accountIds.map(id => 
-      balances.getAccountBalance.execute(id).then(balance => ({ id, balance: balance?.balance || 0 }))
+      balances.getAccountBalance.execute(id).then(balance => ({ 
+        id, 
+        balance: balance?.balances.find(b => b.code === 'HBAR')?.amount || 0 
+      }))
     );
     
     const results = await Promise.all(balancePromises);
@@ -91,6 +96,10 @@ export function useHederaOperations() {
     return accountBalances[accountId] || 0;
   }, [accountBalances]);
 
+  const getMultiCurrencyBalance = useCallback(async (accountId: string) => {
+    return await balances.getAccountBalance.execute(accountId);
+  }, [balances.getAccountBalance]);
+
   return {
     selectedAccount,
     accountBalances,
@@ -98,6 +107,7 @@ export function useHederaOperations() {
     refreshAccountBalance,
     refreshAllBalances,
     getAccountBalanceLocal,
+    getMultiCurrencyBalance,
     ...accounts,
     ...balances,
   };

@@ -148,12 +148,12 @@ export interface HederaAccountService {
   getAllAccounts(): Promise<HederaAccount[]>;
   getActiveAccounts(): Promise<HederaAccount[]>;
   updateAccountBalance(accountId: string, balance: number): Promise<void>;
-  getAccountBalance(accountId: string): Promise<number>;
+  getAccountBalance(accountId: string): Promise<{ code: string; amount: number }[]>;
   getAccountInfo(accountId: string): Promise<any>;
 }
 
 export interface HederaService {
-  getAccountBalance(accountId: string): Promise<number>;
+  getAccountBalance(accountId: string): Promise<{ code: string; amount: number }[]>;
   transferHbar(fromAccountId: string, toAccountId: string, amount: number): Promise<HederaTransactionResult>;
   createAccount(initialBalance: number, alias?: string): Promise<{ accountId: string; privateKey: string; publicKey: string }>;
   getAccountInfo(accountId: string): Promise<any>;

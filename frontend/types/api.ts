@@ -64,9 +64,14 @@ export interface CreateHederaAccountResponse {
   updated_at: string;
 }
 
+export interface CurrencyBalance {
+  code: string;
+  amount: number;
+}
+
 export interface AccountBalance {
   accountId: string;
-  balance: number;
+  balances: CurrencyBalance[];
 }
 
 export interface AccountInfo {

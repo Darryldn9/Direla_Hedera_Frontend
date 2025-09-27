@@ -711,12 +711,12 @@ export class HederaAccountRoutes {
       
       logger.debug('GET /hedera-accounts/balance/:accountId - Getting balance', { accountId });
       
-      const balance = await this.hederaAccountService.getAccountBalance(accountId);
+      const balances = await this.hederaAccountService.getAccountBalance(accountId);
       
       res.json({
         success: true,
-        data: { accountId, balance },
-        message: `Account balance: ${balance} HBAR`
+        data: { accountId, balances },
+        message: `Account balances retrieved successfully`
       });
     } catch (error) {
       logger.error('GET /hedera-accounts/balance/:accountId failed', { accountId: req.params.accountId, error });

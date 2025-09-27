@@ -137,15 +137,15 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       const saleAmount = parseFloat(amount || '0');
       if (saleAmount > 0) {
         onSaleComplete(saleAmount, 'qr');
+        // Show congratulations after sale is completed
+        const formattedAmount = formatAmount(amount);
+        const completedAt = new Date().toLocaleString();
+        setCongratsText({ currency: 'R', amount: formattedAmount, from: 'customer', completedAt });
+        setShowCongratsDialog(true);
       }
       setShowQRDialog(false);
       setIsProcessing(false);
       setAutoPollingStarted(false);
-      // Show congratulations; user will close manually
-      const formattedAmount = formatAmount(amount);
-      const completedAt = new Date().toLocaleString();
-      setCongratsText({ currency: 'R', amount: formattedAmount, from: 'customer', completedAt });
-      setShowCongratsDialog(true);
     } else if (pollStatus === 'timeout') {
       Alert.alert('Payment timed out', 'No payment detected within 1 minute.');
       setAutoPollingStarted(false);

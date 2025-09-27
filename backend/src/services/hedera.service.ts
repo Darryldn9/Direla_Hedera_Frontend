@@ -23,7 +23,7 @@ export class HederaServiceImpl implements HederaService {
     this.externalApi = externalApi || new ExternalApiInfrastructure('', '');
   }
 
-  async getAccountBalance(accountId: string): Promise<number> {
+  async getAccountBalance(accountId: string): Promise<{ code: string; amount: number }[]> {
     return this.hederaInfra.getAccountBalance(accountId);
   }
 
@@ -209,8 +209,12 @@ export class HederaServiceImpl implements HederaService {
       }
 
       // Get current balances from Hedera network
-      const fromBalance = await this.hederaAccountService.getAccountBalance(fromAccountId);
-      const toBalance = await this.hederaAccountService.getAccountBalance(toAccountId);
+      const fromBalanceData = await this.hederaAccountService.getAccountBalance(fromAccountId);
+      const toBalanceData = await this.hederaAccountService.getAccountBalance(toAccountId);
+
+      // Extract HBAR balances
+      const fromBalance = fromBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
+      const toBalance = toBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
 
       // Check sufficient balance (always in HBAR for Hedera network)
       if (fromBalance < hbarAmount) {
