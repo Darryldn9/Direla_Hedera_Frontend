@@ -40,6 +40,7 @@ export interface HederaAccount {
   user_id: string;
   created_at: string;
   updated_at: string;
+  preferred_currency: string;
 }
 
 export interface CreateHederaAccountRequest {
@@ -89,6 +90,9 @@ export interface PaymentRequest {
   toAccountId: string;
   amount: number;
   memo?: string;
+  fromCurrency?: string;
+  toCurrency?: string;
+  quoteId?: string;
 }
 
 export interface TransactionResponse {
@@ -118,6 +122,9 @@ export interface ProcessPaymentWithDIDRequest {
   amount: number;
   memo?: string;
   merchant_user_id?: string;
+  fromCurrency?: string;
+  toCurrency?: string;
+  quoteId?: string;
 }
 
 export interface ProcessPaymentWithDIDResponse {
@@ -174,6 +181,25 @@ export interface RequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
   body?: any;
+}
+
+// Currency Quote Types
+export interface CurrencyQuote {
+  quoteId: string;
+  fromCurrency: string;
+  toCurrency: string;
+  fromAmount: number;
+  toAmount: number;
+  exchangeRate: number;
+  expiresAt: number; // Unix timestamp
+}
+
+export interface GenerateQuoteRequest {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  fromCurrency?: string;
+  toCurrency?: string;
 }
 
 // Service Configuration

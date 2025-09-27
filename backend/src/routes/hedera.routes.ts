@@ -16,6 +16,7 @@ export class HederaRoutes {
   private setupRoutes(): void {
     this.router.post('/transfer', this.transferHbar.bind(this));
     this.router.post('/payment', this.processPayment.bind(this));
+    this.router.post('/quote', this.generateQuote.bind(this));
     this.router.get('/transaction-history/:accountId', this.getTransactionHistory.bind(this));
   }
 
@@ -359,6 +360,128 @@ export class HederaRoutes {
       res.status(500).json({
         success: false,
         error: errorMessage
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /hedera/quote:
+   *   post:
+   *     summary: Generate a currency quote for payment
+   *     tags: [Hedera]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               fromAccountId:
+   *                 type: string
+   *                 example: "0.0.123456"
+   *               toAccountId:
+   *                 type: string
+   *                 example: "0.0.789012"
+   *               amount:
+   *                 type: number
+   *                 example: 100.0
+   *               fromCurrency:
+   *                 type: string
+   *                 example: "USD"
+   *               toCurrency:
+   *                 type: string
+   *                 example: "EUR"
+   *     responses:
+   *       200:
+   *         description: Quote generated successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     quoteId:
+   *                       type: string
+   *                       example: "quote_1234567890_abc123"
+   *                     fromCurrency:
+   *                       type: string
+   *                       example: "USD"
+   *                     toCurrency:
+   *                       type: string
+   *                       example: "EUR"
+   *                     fromAmount:
+   *                       type: number
+   *                       example: 100.0
+   *                     toAmount:
+   *                       type: number
+   *                       example: 85.0
+   *                     exchangeRate:
+   *                       type: number
+   *                       example: 0.85
+   *                     expiresAt:
+   *                       type: number
+   *                       example: 1234567890
+   *                 message:
+   *                   type: string
+   *                   example: "Quote generated successfully"
+   *       400:
+   *         description: Bad request - missing required fields or invalid amount
+   *       500:
+   *         description: Internal server error
+   */
+  private async generateQuote(req: Request, res: Response): Promise<void> {
+    try {
+      const { fromAccountId, toAccountId, amount, fromCurrency, toCurrency } = req.body;
+      
+      // Validate required fields
+      if (!fromAccountId || !toAccountId || amount === undefined) {
+        res.status(400).json({
+          success: false,
+          error: 'Missing required fields: fromAccountId, toAccountId, amount'
+        });
+        return;
+      }
+
+      if (typeof amount !== 'number' || amount <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Amount must be a positive number'
+        });
+        return;
+      }
+
+      logger.info('POST /hedera/quote - Generating quote', { 
+        fromAccountId, 
+        toAccountId, 
+        amount,
+        fromCurrency,
+        toCurrency
+      });
+      
+      const quote = await this.hederaService.generatePaymentQuote(
+        fromAccountId,
+        toAccountId,
+        amount,
+        fromCurrency,
+        toCurrency
+      );
+      
+      res.json({
+        success: true,
+        data: quote,
+        message: 'Quote generated successfully'
+      });
+    } catch (error) {
+      logger.error('POST /hedera/quote failed', { error, body: req.body });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate quote'
       });
     }
   }

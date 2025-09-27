@@ -7,7 +7,7 @@ export const defaultApiConfig: ApiConfig = {
   retryAttempts: 3,
 };
 
-const MY_IP = "192.168.10.187"; // Replace with your actual IP address
+const MY_IP = "192.168.0.100"; // Replace with your actual IP address
 
 // Environment-based configuration
 export const getApiConfig = (): ApiConfig => {

@@ -72,7 +72,7 @@ export class App {
       // Set the HederaAccountService in userService to enable automatic Hedera account creation
       userService.setHederaAccountService(hederaAccountService);
       
-      const hederaService = new HederaServiceImpl(hederaInfra, hederaAccountService);
+      const hederaService = new HederaServiceImpl(hederaInfra, hederaAccountService, externalApiInfra);
       
       // Initialize DID service with existing Hedera infrastructure
       const didService = new DIDService(hederaInfra, config.did.hcsTopicId || undefined);

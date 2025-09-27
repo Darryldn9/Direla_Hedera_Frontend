@@ -59,6 +59,9 @@ interface QRPaymentData {
   memo?: string; // Optional memo for transaction
   merchant_user_id?: string; // For DID logging
   timestamp: string;
+  fromCurrency?: string; // Sender's preferred currency
+  toCurrency?: string; // Receiver's preferred currency
+  quoteId?: string; // For quote-based payments
 }
 
 export default function PayScreen() {
@@ -77,6 +80,8 @@ export default function PayScreen() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [autoPollingStarted, setAutoPollingStarted] = useState(false);
   const [qrValue, setQrValue] = useState('');
+  const [receiverCurrency, setReceiverCurrency] = useState('HBAR');
+  const [senderCurrency, setSenderCurrency] = useState('HBAR');
 
   // State for optional features
   const [showContactModal, setShowContactModal] = useState(false);
@@ -129,18 +134,20 @@ export default function PayScreen() {
   // Generate QR code data for receive payments
   useEffect(() => {
     if (showQRDialog && selectedAccount && amount) {
-      const qrData = {
+      const qrData: QRPaymentData = {
         toAccountId: selectedAccount.account_id,
-        amount: parseFloat(amount), // Direct HBAR input
-        currency: 'HBAR',
+        amount: parseFloat(amount),
+        currency: receiverCurrency,
         accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
         memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`,
         merchant_user_id: currentUser?.user_id,
         timestamp: new Date().toISOString(),
+        fromCurrency: senderCurrency,
+        toCurrency: receiverCurrency,
       };
       setQrValue(JSON.stringify(qrData));
     }
-  }, [showQRDialog, selectedAccount, amount, currentUser?.user_id]);
+  }, [showQRDialog, selectedAccount, amount, currentUser?.user_id, receiverCurrency, senderCurrency]);
 
   // Handle polling lifecycle
   useEffect(() => {
@@ -349,7 +356,9 @@ export default function PayScreen() {
         toAccountId: paymentData.toAccountId,
         amount: paymentData.amount,
         memo: paymentData.memo || `Payment to ${paymentData.accountAlias || paymentData.toAccountId}`,
-        merchant_user_id: paymentData.merchant_user_id
+        merchant_user_id: paymentData.merchant_user_id,
+        fromCurrency: paymentData.fromCurrency || selectedAccount.preferred_currency || 'HBAR',
+        toCurrency: paymentData.toCurrency || paymentData.currency
       };
 
       // Process the payment
@@ -883,7 +892,31 @@ export default function PayScreen() {
                   keyboardType="numeric"
                   placeholderTextColor="#BDC3C7"
                 />
-                <Text style={styles.currencyText}>HBAR</Text>
+                <Text style={styles.currencyText}>{receiverCurrency}</Text>
+              </View>
+
+              {/* Currency Selection */}
+              <View style={styles.currencySelectionContainer}>
+                <Text style={styles.currencyLabel}>Receiver Currency:</Text>
+                <View style={styles.currencyButtons}>
+                  {['HBAR', 'USD', 'EUR', 'GBP'].map((currency) => (
+                    <TouchableOpacity
+                      key={currency}
+                      style={[
+                        styles.currencyButton,
+                        receiverCurrency === currency && styles.currencyButtonSelected
+                      ]}
+                      onPress={() => setReceiverCurrency(currency)}
+                    >
+                      <Text style={[
+                        styles.currencyButtonText,
+                        receiverCurrency === currency && styles.currencyButtonTextSelected
+                      ]}>
+                        {currency}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               {/* Generate QR Button */}
@@ -951,7 +984,7 @@ export default function PayScreen() {
                 <Text>Generating QR...</Text>
               )}
             </View>
-            <Text style={styles.qrAmountText}>{parseFloat(amount || '0').toFixed(2)} HBAR</Text>
+            <Text style={styles.qrAmountText}>{parseFloat(amount || '0').toFixed(2)} {receiverCurrency}</Text>
             <Text style={styles.qrSubtitle}>Ask the payer to scan this QR code</Text>
             {poller && (
               <Text style={styles.countdown}>
@@ -1305,6 +1338,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#8E8E93',
+  },
+  currencySelectionContainer: {
+    marginBottom: 20,
+  },
+  currencyLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 8,
+  },
+  currencyButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  currencyButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    backgroundColor: '#FFFFFF',
+  },
+  currencyButtonSelected: {
+    backgroundColor: '#0C7C59',
+    borderColor: '#0C7C59',
+  },
+  currencyButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  currencyButtonTextSelected: {
+    color: '#FFFFFF',
   },
   generateQRButton: {
     flexDirection: 'row',

@@ -33,6 +33,7 @@ export interface HederaAccount {
   created_at: string;
   updated_at: string;
   user_id: string; // UUID foreign key to users.user_id
+  preferred_currency: string; // User's preferred currency (e.g., 'USD', 'EUR', 'HBAR')
 }
 
 export interface CreateHederaAccountRequest {
@@ -51,6 +52,9 @@ export interface PaymentRequest {
   toAccountId: string;
   amount: number;
   memo?: string;
+  fromCurrency?: string; // Optional: defaults to sender's preferred currency
+  toCurrency?: string; // Optional: defaults to receiver's preferred currency
+  quoteId?: string; // Optional: for quote-based payments
 }
 
 // Hedera related types
@@ -155,8 +159,35 @@ export interface HederaService {
   getAccountInfo(accountId: string): Promise<any>;
   processPayment(paymentRequest: PaymentRequest): Promise<HederaTransactionResult>;
   getTransactionHistory(accountId: string, limit?: number): Promise<TransactionHistoryItem[]>;
+  generatePaymentQuote(fromAccountId: string, toAccountId: string, amount: number, fromCurrency?: string, toCurrency?: string): Promise<CurrencyQuote>;
 }
 
 export interface ExternalApiService {
   notifyService(request: ExternalNotificationRequest): Promise<ExternalNotificationResponse>;
+}
+
+// Currency conversion types
+export interface CurrencyConversionRequest {
+  fromCurrency: string;
+  toCurrency: string;
+  amount: number;
+}
+
+export interface CurrencyConversionResponse {
+  fromCurrency: string;
+  toCurrency: string;
+  fromAmount: number;
+  toAmount: number;
+  exchangeRate: number;
+  timestamp: number;
+}
+
+export interface CurrencyQuote {
+  fromCurrency: string;
+  toCurrency: string;
+  fromAmount: number;
+  toAmount: number;
+  exchangeRate: number;
+  expiresAt: number; // Unix timestamp
+  quoteId: string;
 }
