@@ -40,7 +40,7 @@ export interface HederaAccount {
   user_id: string;
   created_at: string;
   updated_at: string;
-  preferred_currency: string;
+  currency: string;
 }
 
 export interface CreateHederaAccountRequest {

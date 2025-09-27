@@ -48,6 +48,7 @@ export const API_ENDPOINTS = {
   // Hedera Operations
   HEDERA_TRANSFER: '/hedera/transfer',
   HEDERA_PAYMENT: '/hedera/payment',
+  HEDERA_QUOTE: '/hedera/quote',
   HEDERA_TRANSACTION_HISTORY: (accountId: string) => `/hedera/transaction-history/${accountId}`,
   
   // Cached Transactions

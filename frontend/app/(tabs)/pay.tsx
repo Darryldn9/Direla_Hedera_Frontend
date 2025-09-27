@@ -20,6 +20,7 @@ import { useUserManagement } from '../../hooks/useAuth';
 import { usePaymentManager } from '../../hooks/usePayments';
 import { usePaymentPollingWithToast } from '../../hooks/usePaymentPollingWithToast';
 import { useToast } from '../../hooks/useToast';
+import { useQuote } from '../../hooks/useQuote';
 import { ProcessPaymentWithDIDRequest } from '../../types/api';
 import {
   QrCode,
@@ -96,6 +97,7 @@ export default function PayScreen() {
   const { currentUser } = useUserManagement();
   const { makePayment } = usePaymentManager();
   const { showSuccess, showError, showInfo } = useToast();
+  const { generateQuote, quote, isLoading: isQuoteLoading, error: quoteError } = useQuote();
 
   // Initialize the polling hook for receive payments
   const poller = usePaymentPollingWithToast(
@@ -342,6 +344,44 @@ export default function PayScreen() {
     setRecipient(paymentData.toAccountId);
     setIsProcessingPayment(true);
     
+    // Determine currencies
+    const fromCurrency = paymentData.fromCurrency || selectedAccount.currency || 'HBAR';
+    const toCurrency = paymentData.toCurrency || paymentData.currency;
+    
+    // Check if currencies are different and fetch quote if needed
+    let quoteId: string | undefined;
+    if (fromCurrency !== toCurrency) {
+      showInfo(
+        'Getting Quote',
+        `Fetching exchange rate for ${fromCurrency} to ${toCurrency}...`,
+        0
+      );
+      
+      try {
+        const quote = await generateQuote({
+          fromAccountId: selectedAccount.account_id,
+          toAccountId: paymentData.toAccountId,
+          amount: paymentData.amount,
+          fromCurrency,
+          toCurrency
+        });
+        
+        if (quote) {
+          quoteId = quote.quoteId;
+          showInfo(
+            'Quote Received',
+            `Exchange rate: 1 ${fromCurrency} = ${quote.exchangeRate.toFixed(4)} ${toCurrency}\nYou will send: ${quote.fromAmount.toFixed(2)} ${fromCurrency}\nRecipient will receive: ${quote.toAmount.toFixed(2)} ${toCurrency}`,
+            5000
+          );
+        } else {
+          showError('Quote Error', 'Failed to get exchange rate. Proceeding with payment...');
+        }
+      } catch (error) {
+        console.error('Quote generation failed:', error);
+        showError('Quote Error', 'Failed to get exchange rate. Proceeding with payment...');
+      }
+    }
+    
     // Show processing toast
     showInfo(
       'Processing Payment',
@@ -357,8 +397,9 @@ export default function PayScreen() {
         amount: paymentData.amount,
         memo: paymentData.memo || `Payment to ${paymentData.accountAlias || paymentData.toAccountId}`,
         merchant_user_id: paymentData.merchant_user_id,
-        fromCurrency: paymentData.fromCurrency || selectedAccount.preferred_currency || 'HBAR',
-        toCurrency: paymentData.toCurrency || paymentData.currency
+        fromCurrency,
+        toCurrency,
+        quoteId
       };
 
       // Process the payment
@@ -525,7 +566,7 @@ export default function PayScreen() {
     }
   };
 
-  const handleQRCodeScanned = ({ data }: { data: string }) => {
+  const handleQRCodeScanned = async ({ data }: { data: string }) => {
     setShowCamera(false);
     
     try {
@@ -534,10 +575,36 @@ export default function PayScreen() {
       
       // Validate that it contains the expected payment fields
       if (paymentData.toAccountId && paymentData.amount && paymentData.currency) {
+        // Determine currencies
+        const fromCurrency = paymentData.fromCurrency || selectedAccount?.currency || 'HBAR';
+        const toCurrency = paymentData.toCurrency || paymentData.currency;
+        
+        let confirmationMessage = `Pay ${paymentData.amount.toFixed(2)} ${paymentData.currency} to ${paymentData.accountAlias || paymentData.toAccountId}?`;
+        
+        // If currencies are different, fetch and show quote
+        if (fromCurrency !== toCurrency && selectedAccount) {
+          try {
+            const quote = await generateQuote({
+              fromAccountId: selectedAccount.account_id,
+              toAccountId: paymentData.toAccountId,
+              amount: paymentData.amount,
+              fromCurrency,
+              toCurrency
+            });
+            
+            if (quote) {
+              confirmationMessage = `Pay ${paymentData.amount.toFixed(2)} ${paymentData.currency} to ${paymentData.accountAlias || paymentData.toAccountId}?\n\nExchange Rate: 1 ${fromCurrency} = ${quote.exchangeRate.toFixed(4)} ${toCurrency}\nYou will send: ${quote.fromAmount.toFixed(2)} ${fromCurrency}\nRecipient will receive: ${quote.toAmount.toFixed(2)} ${toCurrency}`;
+            }
+          } catch (error) {
+            console.error('Failed to fetch quote:', error);
+            confirmationMessage += `\n\nNote: Unable to fetch exchange rate for ${fromCurrency} to ${toCurrency}. Payment will proceed with estimated conversion.`;
+          }
+        }
+        
         // Display payment confirmation with extracted data
         Alert.alert(
           'Payment Request Detected',
-          `Pay ${paymentData.amount.toFixed(2)} ${paymentData.currency} to ${paymentData.accountAlias || paymentData.toAccountId}?`,
+          confirmationMessage,
           [
             { 
               text: 'Cancel', 

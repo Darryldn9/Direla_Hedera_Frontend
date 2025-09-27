@@ -43,10 +43,10 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
   const [autoPollingStarted, setAutoPollingStarted] = useState(false);
   const [qrValue, setQrValue] = useState('');
   const [showCongratsDialog, setShowCongratsDialog] = useState(false);
-  const [congratsText, setCongratsText] = useState<{ currency: string; amount: string; from: string; completedAt: string }>({ currency: 'R', amount: '0.00', from: 'customer', completedAt: '' });
-  
   const { selectedAccount } = useAccount();
   const { currentUser } = useUserManagement();
+  
+  const [congratsText, setCongratsText] = useState<{ currency: string; amount: string; from: string; completedAt: string }>({ currency: selectedAccount?.currency || 'R', amount: '0.00', from: 'customer', completedAt: '' });
 
   const poller = usePaymentPollingWithToast(
     selectedAccount && amount
@@ -91,6 +91,13 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       }).start();
     }
   }, [visible]);
+
+  // Update congratsText currency when selectedAccount changes
+  React.useEffect(() => {
+    if (selectedAccount?.currency) {
+      setCongratsText(prev => ({ ...prev, currency: selectedAccount.currency }));
+    }
+  }, [selectedAccount?.currency]);
 
   const handleNumberPress = (num: string) => {
     if (amount.length < 10) { // Limit amount length
@@ -140,7 +147,7 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
         // Show congratulations after sale is completed
         const formattedAmount = formatAmount(amount);
         const completedAt = new Date().toLocaleString();
-        setCongratsText({ currency: 'R', amount: formattedAmount, from: 'customer', completedAt });
+        setCongratsText({ currency: selectedAccount?.currency || 'R', amount: formattedAmount, from: 'customer', completedAt });
         setShowCongratsDialog(true);
       }
       setShowQRDialog(false);
@@ -167,7 +174,7 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       onSaleComplete(saleAmount, selectedMethod);
       const formattedAmount = formatAmount(amount);
       const completedAt = new Date().toLocaleString();
-      setCongratsText({ currency: 'R', amount: formattedAmount, from: 'customer', completedAt });
+      setCongratsText({ currency: selectedAccount?.currency || 'R', amount: formattedAmount, from: 'customer', completedAt });
       setShowCongratsDialog(true);
     }, 2000);
   };
@@ -199,7 +206,7 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       const qrData = {
         toAccountId: selectedAccount.account_id,
         amount: parseFloat(amount) / 100,
-        currency: 'HBAR',
+        currency: selectedAccount.currency || 'R',
         accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
         memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`,
         merchant_user_id: currentUser?.user_id,
@@ -291,7 +298,7 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
                     style={styles.amountTextContainer}
                     onPress={handleClearAmount}
                   >
-                    <Text style={styles.amountText}>R {formatAmount(amount)}</Text>
+                    <Text style={styles.amountText}>{selectedAccount?.currency || 'R'} {formatAmount(amount)}</Text>
                   </TouchableOpacity>
                   {amount && (
                     <TouchableOpacity 
@@ -375,7 +382,7 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
           {step === 2 && (
             <View style={styles.paymentStep}>
               <View style={styles.paymentAmountDisplay}>
-                <Text style={styles.paymentAmountText}>R {formatAmount(amount)}</Text>
+                <Text style={styles.paymentAmountText}>{selectedAccount?.currency || 'R'} {formatAmount(amount)}</Text>
                 <Text style={styles.paymentAmountLabel}>Amount due</Text>
               </View>
 
@@ -477,7 +484,7 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
               </View>
               
               <View style={styles.qrAmountDisplay}>
-                <Text style={styles.qrAmountText}>{formatAmount(amount)} HBAR</Text>
+                <Text style={styles.qrAmountText}>{formatAmount(amount)} {selectedAccount?.currency || 'R'}</Text>
                 <Text style={styles.qrAmountLabel}>Amount to be paid</Text>
               </View>
               

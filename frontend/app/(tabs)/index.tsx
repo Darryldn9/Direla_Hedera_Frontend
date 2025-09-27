@@ -8,6 +8,7 @@ import AppleWalletModal from '@/components/AppleWalletModal';
 import { useUserManagement } from '@/hooks/useAuth';
 import { useAccount } from '@/contexts/AccountContext';
 import { useTransactionHistory } from '@/hooks/useTransactionHistory';
+import { useHederaOperations } from '@/hooks/useHedera';
 import moment from 'moment';
 
 interface Transaction {
@@ -28,11 +29,8 @@ function WalletScreen() {
   const { currentUser } = useUserManagement();
 
   const { selectedAccount } = useAccount();
+  const { getMultiCurrencyBalance } = useHederaOperations();
   const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
-
-  // State for live balance
-  const [liveBalance, setLiveBalance] = useState<number | null>(null); // Start with null to indicate not loaded
-  const [balanceLoading, setBalanceLoading] = useState(true); // Start with true to show loading initially
 
   // Fetch transaction history for the selected account
   const {
@@ -42,7 +40,11 @@ function WalletScreen() {
     refresh: refreshTransactions
   } = useTransactionHistory(accountId, 10);
 
-  // Fetch live balance function
+  // State for live balance
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+
+  // Fetch live balance function using the existing multicurrency system
   const fetchLiveBalance = async () => {
     if (!selectedAccount?.account_id) {
       setLiveBalance(0);
@@ -52,20 +54,25 @@ function WalletScreen() {
 
     setBalanceLoading(true);
     try {
-      // Use the configured API service instead of hardcoded URL
-      const { api } = await import('@/services/api');
-      const response = await api.hedera.getAccountBalance(selectedAccount.account_id);
-
-      if (response.success && response.data) {
-        setLiveBalance(response.data.balance);
-        console.log('Live balance fetched:', response.data.balance);
+      const balance = await getMultiCurrencyBalance(selectedAccount.account_id);
+      if (balance && balance.balances && balance.balances.length > 0) {
+        // Find the balance for the account's currency from the database
+        const accountCurrency = selectedAccount.currency || 'HBAR';
+        const currencyBalance = balance.balances.find(b => b.code === accountCurrency);
+        
+        if (currencyBalance) {
+          setLiveBalance(currencyBalance.amount);
+        } else {
+          // Fallback to HBAR if account currency not found
+          const hbarBalance = balance.balances.find(b => b.code === 'HBAR');
+          setLiveBalance(hbarBalance?.amount ?? 0);
+        }
       } else {
-        console.error('Failed to fetch live balance:', response.error);
-        setLiveBalance(selectedAccount.balance ?? 0); // Fallback to database balance
+        setLiveBalance(0);
       }
     } catch (error) {
       console.error('Error fetching live balance:', error);
-      setLiveBalance(selectedAccount.balance ?? 0); // Fallback to database balance
+      setLiveBalance(0);
     } finally {
       setBalanceLoading(false);
     }
@@ -76,7 +83,7 @@ function WalletScreen() {
     fetchLiveBalance();
   }, [selectedAccount?.account_id]);
 
-  const balance = liveBalance ?? 0; // Display 0 while loading or if null
+  const balance = liveBalance ?? 0;
   
   // Console log loading and error states
   useEffect(() => {
@@ -197,6 +204,7 @@ function WalletScreen() {
         <View style={styles.cardContainer}>
           <VirtualCard
             balance={balance}
+            currency={selectedAccount?.currency}
             cardNumber={cardNumber}
             expiryDate={expiryDate}
             holderName={holderName}

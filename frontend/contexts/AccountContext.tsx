@@ -138,6 +138,13 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     clearAccounts,
   };
 
+  // // Refresh balances when accounts are loaded
+  // useEffect(() => {
+  //   if (accounts.length > 0) {
+  //     refreshAllBalances();
+  //   }
+  // }, [accounts, refreshAllBalances]);
+
   return (
     <AccountContext.Provider value={value}>
       {children}

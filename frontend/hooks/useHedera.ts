@@ -5,14 +5,15 @@ import {
   HederaAccount, 
   CreateHederaAccountRequest, 
   AccountBalance, 
-  AccountInfo 
+  AccountInfo,
+  CreateHederaAccountResponse
 } from '../types/api';
 
 /**
  * Hook for Hedera account operations
  */
 export function useHederaAccounts() {
-  const createAccount = useApi<HederaAccount>(api.hedera.createAccount.bind(api.hedera));
+  const createAccount = useApi<CreateHederaAccountResponse>(api.hedera.createAccount.bind(api.hedera));
   const getAllAccounts = useApi<HederaAccount[]>(api.hedera.getAllAccounts.bind(api.hedera));
   const getActiveAccounts = useApi<HederaAccount[]>(api.hedera.getActiveAccounts.bind(api.hedera));
   const getAccountById = useApi<HederaAccount>(api.hedera.getAccountById.bind(api.hedera));

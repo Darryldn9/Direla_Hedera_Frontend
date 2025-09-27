@@ -10,6 +10,8 @@ import {
   PaymentRequest,
   TransactionResponse,
   TransactionHistoryItem,
+  CurrencyQuote,
+  GenerateQuoteRequest,
   ApiResponse 
 } from '../../types/api';
 import { isValidHederaAccountId } from '../../lib/hederaValidation';
@@ -53,7 +55,9 @@ export class HederaService extends BaseApiService {
         error: 'Invalid Hedera account ID format',
       } as unknown as ApiResponse<AccountBalance>;
     }
-    return this.get<AccountBalance>(API_ENDPOINTS.HEDERA_ACCOUNT_BALANCE(accountId));
+    const response = await this.get<AccountBalance>(API_ENDPOINTS.HEDERA_ACCOUNT_BALANCE(accountId));
+    console.log('Account balance response:', response);
+    return response;
   }
 
   /**
@@ -140,11 +144,11 @@ export class HederaService extends BaseApiService {
   /**
    * Validate account before transaction
    */
-  async validateAccountForTransaction(accountId: string, amount: number): Promise<boolean> {
+  async validateAccountForTransaction(accountId: string, amount: number, currency: string): Promise<boolean> {
     try {
       const balanceResponse = await this.getAccountBalance(accountId);
       if (balanceResponse.success && balanceResponse.data) {
-        return balanceResponse.data.balance >= amount;
+        return (balanceResponse?.data?.balances.find(b => b.code === currency)?.amount ?? 0) >= amount;
       }
       return false;
     } catch {
@@ -164,5 +168,12 @@ export class HederaService extends BaseApiService {
     }
     const queryParams = limit ? `?limit=${limit}` : '';
     return this.get<TransactionHistoryItem[]>(API_ENDPOINTS.HEDERA_TRANSACTION_HISTORY(accountId) + queryParams);
+  }
+
+  /**
+   * Generate a currency quote for payment
+   */
+  async generateQuote(quoteData: GenerateQuoteRequest): Promise<ApiResponse<CurrencyQuote>> {
+    return this.post<CurrencyQuote>(API_ENDPOINTS.HEDERA_QUOTE, quoteData);
   }
 }
