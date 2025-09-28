@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { HederaInfrastructure } from '../infrastructure/hedera.js';
 import { ExternalApiInfrastructure } from '../infrastructure/external-api.js';
 import { AuthService } from './auth.service.js';
+import { cacheGet, cacheSet, cacheKeys, cacheDel } from '../utils/redis.js';
 
 export class HederaAccountServiceImpl implements HederaAccountService {
   private hederaInfra: HederaInfrastructure;
@@ -125,7 +126,7 @@ export class HederaAccountServiceImpl implements HederaAccountService {
         throw new Error(`Failed to get Hedera account: ${error.message}`);
       }
 
-      logger.debug('Hedera account found', { accountId: id });
+      // logger.debug('Hedera account found', { accountId: id });
       return account;
     } catch (error) {
       logger.error('Failed to get Hedera account by ID', { accountId: id, error });
@@ -154,7 +155,7 @@ export class HederaAccountServiceImpl implements HederaAccountService {
         throw new Error(`Failed to get Hedera account: ${error.message}`);
       }
 
-      logger.debug('Hedera account found', { accountId });
+      // logger.debug('Hedera account found', { accountId });
       return account;
     } catch (error) {
       logger.error('Failed to get Hedera account by account ID', { accountId, error });
@@ -343,18 +344,31 @@ export class HederaAccountServiceImpl implements HederaAccountService {
       }
       
       logger.debug('Account balance updated', { accountId, balance });
+
+      // Update/Invalidate cache
+      await cacheSet<number>(cacheKeys.balance(accountId), balance);
     } catch (error) {
       logger.error('Failed to update account balance', { accountId, balance, error });
       throw error;
     }
   }
 
-  async getAccountBalance(accountId: string): Promise<number> {
+  async getAccountBalance(accountId: string): Promise<{ code: string; amount: number }[]> {
     try {
-      logger.debug('Getting account balance from Hedera network', { accountId });
-      
+      // Try cache first
+      const key = cacheKeys.balance(accountId);
+      const cached = await cacheGet<{ code: string; amount: number }[]>(key);
+      if (cached !== null) {
+        logger.debug('Account balance served from cache', { accountId });
+        return cached;
+      }
+
+      logger.debug('Cache miss. Fetching account balance from Hedera network', { accountId });
       const balance = await this.hederaInfra.getAccountBalance(accountId);
-      
+
+      // Store in cache
+      await cacheSet<{ code: string; amount: number }[]>(key, balance);
+
       logger.info('Account balance retrieved', { accountId, balance });
       return balance;
     } catch (error) {

@@ -1,3 +1,4 @@
+import process from 'process';
 import {
   Client,
   AccountId,
@@ -11,10 +12,20 @@ import {
   TopicMessageSubmitTransaction,
   TopicId,
   Status,
-  PublicKey
+  PublicKey,
+  TransactionRecordQuery,
+  TransactionId,
+  TokenId,
+  TokenMintTransaction,
+  TokenBurnTransaction,
+  TokenAssociateTransaction,
+  TokenDissociateTransaction
 } from '@hashgraph/sdk';
-import { HederaConfig, HederaTransactionResult } from '../types/index.js';
+import { HederaConfig, HederaTransactionResult, TransactionHistoryItem } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { config } from '../config/index.js';
+import { assertValidHederaAccountId } from '../utils/hedera-validation.js';
+import { fromBaseUnits } from '../utils/token-amount.js';
 
 export class HederaInfrastructure {
   private client: Client;
@@ -31,6 +42,10 @@ export class HederaInfrastructure {
     
       // Initialize client
     this.client = Client.forName(config.network);
+      
+      // Configure client timeouts for better reliability
+      this.client.setRequestTimeout(60000); // 60 seconds for requests
+      this.client.setMaxAttempts(3); // Retry up to 3 times
       
       // Set operator with validation
     this.client.setOperator(this.operatorId, this.operatorKey);
@@ -52,16 +67,55 @@ export class HederaInfrastructure {
     }
   }
 
-  async getAccountBalance(accountId: string): Promise<number> {
+  async getAccountBalance(accountId: string): Promise<{ code: string; amount: number }[]> {
     try {
+      assertValidHederaAccountId(accountId);
       const query = new AccountBalanceQuery()
         .setAccountId(AccountId.fromString(accountId));
       
       const balance = await query.execute(this.client);
-      const hbarBalance = Number(balance.hbars.toString());
       
-      logger.debug('Account balance retrieved', { accountId, balance: hbarBalance });
-      return hbarBalance;
+      // Define the token IDs for USD and ZAR from environment variables
+      const USD_TOKEN_ID = process.env.USD_TOKEN_ID || '0.0.6916971';
+      const ZAR_TOKEN_ID = process.env.ZAR_TOKEN_ID || '0.0.6916972';
+      
+      // Initialize the balances array with HBAR, USD, and ZAR
+      const balances = [
+        { code: 'HBAR', amount: 0 },
+        { code: 'USD', amount: 0 },
+        { code: 'ZAR', amount: 0 }
+      ];
+      
+      // Get HBAR balance
+      const hbarBalance = balance.hbars.toBigNumber().toNumber();
+      if (balances[0]) {
+        balances[0].amount = hbarBalance;
+      }
+      
+      // Get token balances
+      const tokenBalances = balance.tokens;
+      
+      if (tokenBalances) {
+        for (const [tokenId, balanceAmount] of tokenBalances) {
+          if (tokenId) {
+            const tokenIdString = tokenId.toString();
+            const amount = balanceAmount.toNumber();
+            
+            if (tokenIdString === USD_TOKEN_ID && balances[1]) {
+              balances[1].amount = fromBaseUnits(amount, 'USD');
+            } else if (tokenIdString === ZAR_TOKEN_ID && balances[2]) {
+              balances[2].amount = fromBaseUnits(amount, 'ZAR');
+            }
+          }
+        }
+      }
+      
+      logger.debug('Account balance retrieved', { 
+        accountId, 
+        balances: balances.map(b => `${b.code}: ${b.amount}`).join(', ')
+      });
+      
+      return balances;
     } catch (error) {
       logger.error('Failed to get account balance', { accountId, error });
       throw error;
@@ -80,9 +134,14 @@ export class HederaInfrastructure {
         throw new Error('Private key does not match the account. Please verify your credentials.');
       }
 
+      const tinybars = Math.round(amount * 100000000);
+      if (!Number.isFinite(tinybars)) {
+        throw new Error('Invalid amount provided');
+      }
+
       const transferTransaction = new TransferTransaction()
-        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-amount * 100000000))
-        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(amount * 100000000));
+        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-tinybars))
+        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(tinybars));
 
       const response = await transferTransaction.execute(this.client);
       const receipt = await response.getReceipt(this.client);
@@ -123,14 +182,84 @@ export class HederaInfrastructure {
     }
   }
 
+  /**
+   * Transfer HBAR using the sender's private key as the payer and signer.
+   * This avoids INVALID_SIGNATURE when the configured operator does not match the sender.
+   */
+  async transferHbarFromAccount(
+    fromAccountId: string,
+    fromPrivateKey: string,
+    toAccountId: string,
+    amount: number
+  ): Promise<HederaTransactionResult> {
+    try {
+      const tinybars = Math.round(amount * 100000000);
+      if (!Number.isFinite(tinybars)) {
+        throw new Error('Invalid amount provided');
+      }
+
+      // Build transaction and set payer to the sender account
+      const transferTransaction = new TransferTransaction()
+        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-tinybars))
+        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(tinybars))
+        .setTransactionId(TransactionId.generate(AccountId.fromString(fromAccountId)));
+
+      // Freeze then sign with the sender's private key
+      const senderPrivateKey = this.validateAndParsePrivateKey(fromPrivateKey);
+      const frozen = await transferTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(senderPrivateKey);
+
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Hbar transfer (sender-signed) successful', {
+          fromAccountId,
+          toAccountId,
+          amount,
+          transactionId: response.transactionId.toString()
+        });
+
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Hbar transfer (sender-signed) failed', {
+          fromAccountId,
+          toAccountId,
+          amount,
+          status: receipt.status
+        });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Transfer failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Hbar transfer (sender-signed) error', { fromAccountId, toAccountId, amount, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   async createAccount(initialBalance: number, alias?: string): Promise<{ accountId: string; privateKey: string; publicKey: string }> {
     try {
       const newAccountPrivateKey = PrivateKey.generateED25519();
       const newAccountPublicKey = newAccountPrivateKey.publicKey;
 
+      const initialTinybars = Math.round(initialBalance * 100000000);
+      if (!Number.isFinite(initialTinybars)) {
+        throw new Error('Invalid initial balance provided');
+      }
+
       const accountCreateTransaction = new AccountCreateTransaction()
         .setKey(newAccountPublicKey)
-        .setInitialBalance(Hbar.fromTinybars(initialBalance * 100000000));
+        .setInitialBalance(Hbar.fromTinybars(initialTinybars));
 
       // Add alias if provided
       if (alias) {
@@ -171,6 +300,7 @@ export class HederaInfrastructure {
 
   async getAccountInfo(accountId: string) {
     try {
+      assertValidHederaAccountId(accountId);
       const query = new AccountInfoQuery()
         .setAccountId(AccountId.fromString(accountId));
       
@@ -324,9 +454,14 @@ export class HederaInfrastructure {
       }
 
       // Create and validate transaction
+      const tinybars = Math.round(amount * 100000000);
+      if (!Number.isFinite(tinybars)) {
+        throw new Error('Invalid amount provided');
+      }
+
       const transferTransaction = new TransferTransaction()
-        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-amount * 100000000))
-        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(amount * 100000000));
+        .addHbarTransfer(AccountId.fromString(fromAccountId), Hbar.fromTinybars(-tinybars))
+        .addHbarTransfer(AccountId.fromString(toAccountId), Hbar.fromTinybars(tinybars));
 
       await this.validateTransaction(transferTransaction);
 
@@ -419,6 +554,10 @@ export class HederaInfrastructure {
    */
   async createTopic(): Promise<string> {
     try {
+      // Use HCS topic ID from environment variable or fallback to hardcoded value
+      return process.env.HCS_TOPIC_ID || "0.0.6880055";
+
+      /*
       logger.info('Creating HCS topic');
 
       const transaction = new TopicCreateTransaction();
@@ -437,6 +576,7 @@ export class HederaInfrastructure {
       } else {
         throw new Error('Failed to create HCS topic');
       }
+    */
     } catch (error) {
       logger.error('Failed to create HCS topic', { error });
       throw error;
@@ -484,6 +624,463 @@ export class HederaInfrastructure {
       }
     } catch (error) {
       logger.error('HCS message submission error', { topicId, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Get transaction history for an account using Hedera Mirror Node API
+   * 
+   * This method fetches real transaction data from the Hedera Mirror Node REST API.
+   * The API provides historical transaction data for any account on the Hedera network.
+   * 
+   * API Documentation: https://docs.hedera.com/hedera/sdks-and-apis/rest-api
+   * 
+   * @param accountId - The Hedera account ID to fetch transactions for
+   * @param limit - Maximum number of transactions to return (default: 50)
+   * @returns Promise<TransactionHistoryItem[]> - Array of transaction history items with aliases
+   */
+  async getTransactionHistory(accountId: string, limit: number = 50): Promise<TransactionHistoryItem[]> {
+    try {
+      assertValidHederaAccountId(accountId);
+      logger.info('Fetching transaction history from Mirror Node API', { accountId, limit });
+
+      // Use appropriate mirror node API based on network configuration
+      const mirrorNodeUrl = config.mirrorNode[config.hedera.network];
+      
+      // Fetch all transactions for the account using the correct endpoint
+      const transactionsResponse = await this.fetchFromMirrorNode(
+        `${mirrorNodeUrl}/api/v1/transactions?account.id=${accountId}&limit=${limit}&order=desc`
+      );
+
+      const transactions = transactionsResponse.transactions || [];
+
+      logger.debug('Mirror Node API response received', { 
+        transactionCount: transactions.length
+      });
+
+      if (transactions.length === 0) {
+        logger.info('No transactions found for account', { accountId });
+        return [];
+      }
+
+      // Parse transactions from the Mirror Node API response
+      const transactionHistoryItems: TransactionHistoryItem[] = [];
+
+      for (const transaction of transactions) {
+        const consensusTimestamp = Number(transaction.consensus_timestamp.split('.')[0]) * 1000;
+        const gasFee = transaction.charged_tx_fee || 0;
+        
+        // Process token transfers within this transaction
+        if (transaction.token_transfers && transaction.token_transfers.length > 0) {
+          for (const tokenTransfer of transaction.token_transfers) {
+            const isReceive = tokenTransfer.amount > 0;
+            const amount = Math.abs(tokenTransfer.amount);
+            const currency = this.getCurrencyFromTokenId(tokenTransfer.token_id);
+            
+            // Determine transaction type based on the transaction name
+            let type = 'TRANSFER';
+            if (transaction.name === 'TOKENMINT') {
+              type = 'MINT';
+            } else if (transaction.name === 'TOKENBURN') {
+              type = 'BURN';
+            } else if (transaction.name === 'CRYPTOTRANSFER') {
+              type = 'TRANSFER';
+            }
+
+            transactionHistoryItems.push({
+              amount,
+              currency,
+              gasFee: 0, // Token transfers don't have separate gas fees
+              time: consensusTimestamp,
+              to: isReceive ? accountId : tokenTransfer.account,
+              from: isReceive ? tokenTransfer.account : accountId,
+              fromAlias: isReceive ? tokenTransfer.account : accountId,
+              toAlias: isReceive ? accountId : tokenTransfer.account,
+              transactionId: transaction.transaction_id,
+              type: type as 'TRANSFER' | 'MINT' | 'BURN',
+              memo: transaction.memo_base64 ? Buffer.from(transaction.memo_base64, 'base64').toString() : ''
+            });
+          }
+        }
+
+        // Process HBAR transfers (if any)
+        if (transaction.transfers && transaction.transfers.length > 0) {
+          for (const transfer of transaction.transfers) {
+            // Skip fee transfers and transfers to/from the account itself
+            if (transfer.account === accountId || transfer.amount === 0) {
+              continue;
+            }
+
+            const isReceive = transfer.amount > 0;
+            const amount = Math.abs(transfer.amount) / 100000000; // Convert tinybars to HBAR
+
+            transactionHistoryItems.push({
+              amount,
+              currency: 'HBAR',
+              gasFee: 0,
+              time: consensusTimestamp,
+              to: isReceive ? accountId : transfer.account,
+              from: isReceive ? transfer.account : accountId,
+              fromAlias: isReceive ? transfer.account : accountId,
+              toAlias: isReceive ? accountId : transfer.account,
+              transactionId: transaction.transaction_id,
+              type: 'TRANSFER',
+              memo: transaction.memo_base64 ? Buffer.from(transaction.memo_base64, 'base64').toString() : ''
+            });
+          }
+        }
+      }
+
+      // Sort all transactions by time (most recent first) and limit results
+      const allTransactions = transactionHistoryItems
+        .sort((a, b) => b.time - a.time)
+        .slice(0, limit);
+
+      logger.info('Transaction history retrieved from Mirror Node API', { 
+        accountId, 
+        totalCount: allTransactions.length
+      });
+
+      return allTransactions;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        logger.error('Mirror Node API request timed out', { accountId });
+      } else if(error instanceof Error) {
+        logger.error('Failed to get transaction history from Mirror Node API', { accountId, error });
+      }
+      
+      // Return empty array instead of mock data
+      logger.warn('No transaction history available - Mirror Node API failed', { accountId });
+      return [];
+    }
+  }
+
+  /**
+   * Get token ID for a given currency code
+   */
+  private getTokenIdForCurrency(currency: string): string | null {
+    const tokenMap: Record<string, string | null> = {
+      'USD': process.env.USD_TOKEN_ID || '0.0.6869755',
+      'ZAR': process.env.ZAR_TOKEN_ID || '0.0.6889204',
+      'HBAR': null // HBAR doesn't have a token ID
+    };
+    
+    return tokenMap[currency] || null;
+  }
+
+  /**
+   * Get currency code from a token ID
+   */
+  private getCurrencyFromTokenId(tokenId: string): string {
+    const currencyMap: Record<string, string> = {
+      [process.env.USD_TOKEN_ID || '0.0.6869755']: 'USD',
+      [process.env.ZAR_TOKEN_ID || '0.0.6889204']: 'ZAR'
+    };
+    
+    return currencyMap[tokenId] || 'UNKNOWN';
+  }
+
+  /**
+   * Helper method to fetch data from Mirror Node API
+   */
+  private async fetchFromMirrorNode(apiUrl: string): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Mirror Node API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  /**
+   * Associate a token with an account
+   */
+  async associateToken(accountId: string, tokenId: string, privateKey: string): Promise<HederaTransactionResult> {
+    try {
+      assertValidHederaAccountId(accountId);
+      
+      const accountPrivateKey = this.validateAndParsePrivateKey(privateKey);
+      const tokenIdObj = TokenId.fromString(tokenId);
+      
+      const associateTransaction = new TokenAssociateTransaction()
+        .setAccountId(AccountId.fromString(accountId))
+        .setTokenIds([tokenIdObj])
+        .setTransactionId(TransactionId.generate(AccountId.fromString(accountId)));
+
+      const frozen = await associateTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(accountPrivateKey);
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Token association successful', { accountId, tokenId });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Token association failed', { accountId, tokenId, status: receipt.status });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token association failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.toUpperCase().includes('TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT')) {
+        logger.info('Token association already successful', { accountId, tokenId });
+        return {
+          transactionId: '',
+          status: 'SUCCESS'
+        };
+      }
+      logger.error('Token association error', { accountId, tokenId, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Mint tokens to an account
+   */
+  async mintToken(tokenId: string, amount: number, supplyKey: string, toAccountId?: string): Promise<HederaTransactionResult> {
+    try {
+      const tokenIdObj = TokenId.fromString(tokenId);
+      const supplyKeyObj = PrivateKey.fromString(supplyKey);
+  
+      const mintTransaction = await new TokenMintTransaction()
+        .setTokenId(tokenIdObj)
+        .setAmount(amount)
+        .freezeWith(this.client);
+  
+      // Sign with supply key
+      const signedTx = await mintTransaction.sign(supplyKeyObj);
+  
+      // Execute (client will add operator signature automatically as payer)
+      const response = await signedTx.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+  
+      if (receipt.status === Status.Success) {
+        // If toAccountId is specified and different from treasury, transfer tokens to that account
+        if (toAccountId && toAccountId !== this.operatorId.toString()) {
+          logger.info('Transferring minted tokens to target account', {
+            tokenId,
+            amount,
+            fromAccountId: this.operatorId.toString(),
+            toAccountId
+          });
+          
+          const transferResult = await this.transferToken(
+            tokenId, 
+            this.operatorId.toString(), 
+            toAccountId, 
+            amount, 
+            this.operatorKey.toString()
+          );
+          
+          if (transferResult.status !== 'SUCCESS') {
+            logger.error('Failed to transfer minted tokens to target account', {
+              tokenId,
+              amount,
+              toAccountId,
+              transferError: transferResult.message
+            });
+            return {
+              transactionId: response.transactionId.toString(),
+              status: 'FAILED',
+              message: `Token minted but transfer to target account failed: ${transferResult.message}`
+            };
+          }
+          
+          logger.info('Successfully transferred minted tokens to target account', {
+            tokenId,
+            amount,
+            toAccountId,
+            transferTransactionId: transferResult.transactionId
+          });
+        }
+        
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS',
+        };
+      } else {
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token mint failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+  
+  /**
+   * Burn tokens from an account
+   */
+  async burnToken(tokenId: string, amount: number, fromAccountId: string, supplyKey: string, fromAccountPrivateKey?: string): Promise<HederaTransactionResult> {
+    try {
+      assertValidHederaAccountId(fromAccountId);
+      
+      const supplyKeyObj = this.validateAndParsePrivateKey(supplyKey);
+      const tokenIdObj = TokenId.fromString(tokenId);
+      
+      // If burning from a different account than treasury, we need to transfer to treasury first
+      if (fromAccountId !== this.operatorId.toString()) {
+        logger.info('Transferring tokens to treasury before burning', {
+          tokenId,
+          amount,
+          fromAccountId,
+          treasuryAccount: this.operatorId.toString()
+        });
+        
+        // First, transfer tokens from the account to treasury
+        if (!fromAccountPrivateKey) {
+          return {
+            transactionId: '',
+            status: 'FAILED',
+            message: 'Account private key required to transfer tokens for burning'
+          };
+        }
+        
+        const transferResult = await this.transferToken(
+          tokenId,
+          fromAccountId,
+          this.operatorId.toString(),
+          amount,
+          fromAccountPrivateKey
+        );
+        
+        if (transferResult.status !== 'SUCCESS') {
+          logger.error('Failed to transfer tokens to treasury for burning', {
+            tokenId,
+            amount,
+            fromAccountId,
+            transferError: transferResult.message
+          });
+          return {
+            transactionId: '',
+            status: 'FAILED',
+            message: `Failed to transfer tokens to treasury for burning: ${transferResult.message}`
+          };
+        }
+        
+        logger.info('Successfully transferred tokens to treasury for burning', {
+          tokenId,
+          amount,
+          fromAccountId,
+          transferTransactionId: transferResult.transactionId
+        });
+      }
+      
+      // Now burn from treasury
+      const burnTransaction = new TokenBurnTransaction()
+        .setTokenId(tokenIdObj)
+        .setAmount(amount);
+
+      const frozen = await burnTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(supplyKeyObj);
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Token burn successful', { tokenId, amount, fromAccountId });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Token burn failed', { tokenId, amount, fromAccountId, status: receipt.status });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token burn failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Token burn error', { tokenId, amount, fromAccountId, error });
+      return {
+        transactionId: '',
+        status: 'FAILED',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Transfer tokens between accounts
+   */
+  async transferToken(
+    tokenId: string, 
+    fromAccountId: string, 
+    toAccountId: string, 
+    amount: number, 
+    fromPrivateKey: string
+  ): Promise<HederaTransactionResult> {
+    try {
+      assertValidHederaAccountId(fromAccountId);
+      assertValidHederaAccountId(toAccountId);
+      
+      const accountPrivateKey = this.validateAndParsePrivateKey(fromPrivateKey);
+      const tokenIdObj = TokenId.fromString(tokenId);
+      
+      const transferTransaction = new TransferTransaction()
+        .addTokenTransfer(tokenIdObj, AccountId.fromString(fromAccountId), -amount)
+        .addTokenTransfer(tokenIdObj, AccountId.fromString(toAccountId), amount)
+        .setTransactionId(TransactionId.generate(AccountId.fromString(fromAccountId)));
+
+      const frozen = await transferTransaction.freezeWith(this.client);
+      const signed = await frozen.sign(accountPrivateKey);
+      const response = await signed.execute(this.client);
+      const receipt = await response.getReceipt(this.client);
+
+      if (receipt.status === Status.Success) {
+        logger.info('Token transfer successful', { tokenId, fromAccountId, toAccountId, amount });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'SUCCESS'
+        };
+      } else {
+        logger.error('Token transfer failed', { tokenId, fromAccountId, toAccountId, amount, status: receipt.status });
+        return {
+          transactionId: response.transactionId.toString(),
+          status: 'FAILED',
+          message: `Token transfer failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Token transfer error', { tokenId, fromAccountId, toAccountId, amount, error });
       return {
         transactionId: '',
         status: 'FAILED',

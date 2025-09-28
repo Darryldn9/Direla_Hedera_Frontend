@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
@@ -15,24 +16,81 @@ import {
   ChevronRight, 
   RotateCcw,
   CheckCircle,
-  FileEdit
+  FileEdit,
+  AlertCircle
 } from 'lucide-react-native';
+import { useAccount } from '../../contexts/AccountContext';
+import { useCachedTransactions } from '../../hooks/useCachedTransactions';
+import { TransactionHistoryItem } from '../../types/api';
 
 export default function SalesScreen() {
   const insets = useSafeAreaInsets();
+  const { selectedAccount } = useAccount();
+  
+  // State for showing more transactions
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [displayLimit, setDisplayLimit] = useState(10);
+  
+  // Get cached transaction history for the selected account
+  const { 
+    transactions, 
+    isLoading: isLoadingTransactions, 
+    error: transactionError,
+    revenue,
+    isLoadingRevenue,
+    revenueError,
+    refreshCache: refreshTransactions,
+    fetchTransactions,
+    fetchRevenue
+  } = useCachedTransactions(selectedAccount?.account_id);
 
   // Sample business data
   const businessName = "Mama Thandi's Spaza Shop";
   const userInitials = "MT";
-  const last7DaysRevenue = 0.00;
   const motivationalText = "Today's the day to make things happen.";
 
-  // Sample sales data
-  const salesHistory = [
-    { id: 1, type: 'Card', status: 'Approved', amount: -12.00, icon: 'card' },
-    { id: 2, type: 'Card', status: 'Refunded', amount: 12.00, icon: 'refund' },
-    { id: 3, type: 'Card', status: 'Approved', amount: 5.00, icon: 'card' },
-  ];
+  // Calculate revenue from cached data or fetch it
+  const last7DaysRevenue = useMemo(() => {
+    if (revenue) {
+      return revenue.totalRevenue;
+    }
+    
+    // Fallback to calculating from transactions if revenue not available
+    if (!transactions || transactions.length === 0) return 0.00;
+    
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    return transactions
+      .filter(tx => tx.time >= sevenDaysAgo && tx.type === 'RECEIVE')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [revenue, transactions]);
+
+  // Fetch revenue for 7-day period when component mounts
+  useEffect(() => {
+    if (selectedAccount?.account_id) {
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      const now = Date.now();
+      fetchRevenue('weekly', sevenDaysAgo, now);
+    }
+  }, [selectedAccount?.account_id, fetchRevenue]);
+
+  // Transform transaction history for display
+  const salesHistory = useMemo(() => {
+    if (!transactions || transactions.length === 0) return [];
+    
+    const limit = showAllTransactions ? transactions.length : displayLimit;
+    return transactions.slice(0, limit).map((tx, index) => ({
+      id: tx.transactionId,
+      type: tx.type === 'SEND' ? 'Payment' : 'Sale',
+      status: 'Completed', // All transactions from Hedera are completed
+      amount: tx.type === 'SEND' ? -tx.amount : tx.amount,
+      icon: tx.type === 'SEND' ? 'payment' : 'sale',
+      timestamp: tx.time,
+      from: tx.fromAlias || tx.from,
+      to: tx.toAlias || tx.to,
+      gasFee: tx.gasFee,
+      currency: tx.currency
+    }));
+  }, [transactions, showAllTransactions, displayLimit]);
 
   const invoices = [
     { id: 1, title: 'Draft • Nic', status: 'draft' },
@@ -43,11 +101,45 @@ export default function SalesScreen() {
   };
 
   const handleSalesHistoryPress = () => {
-    Alert.alert('Sales History', 'Opening full sales history...');
+    if (showAllTransactions) {
+      // If showing all, collapse back to 10
+      setShowAllTransactions(false);
+      setDisplayLimit(10);
+    } else {
+      // If showing limited, show all transactions
+      setShowAllTransactions(true);
+      setDisplayLimit(transactions?.length || 10);
+    }
+  };
+
+  const handleLoadMore = () => {
+    // Increase the display limit by 10 more transactions
+    setDisplayLimit(prev => Math.min(prev + 10, transactions?.length || 10));
   };
 
   const handleTransactionPress = (transaction: any) => {
-    Alert.alert('Transaction Details', `${transaction.type} - ${transaction.status}: R${Math.abs(transaction.amount).toFixed(2)}`);
+    const date = new Date(transaction.timestamp).toLocaleString();
+    Alert.alert(
+      'Transaction Details', 
+      `${transaction.type} - ${transaction.status}\n` +
+      `Amount: ${transaction.currency} ${Math.abs(transaction.amount).toFixed(2)}\n` +
+      `From: ${transaction.from}\n` +
+      `To: ${transaction.to}\n` +
+      `Date: ${date}\n` +
+      `Gas Fee: ${transaction.currency} ${transaction.gasFee.toFixed(2)}`
+    );
+  };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    
+    return date.toLocaleDateString();
   };
 
   const handleInvoicePress = (invoice: any) => {
@@ -74,8 +166,13 @@ export default function SalesScreen() {
         {/* Revenue Display */}
         <View style={styles.revenueContainer}>
           <Text style={styles.periodText}>Last 7 days</Text>
-          <Text style={styles.revenueAmount}>R{last7DaysRevenue.toFixed(2)}</Text>
-          <Text style={styles.motivationalText}>{motivationalText}</Text>
+          <Text style={styles.revenueAmount}>
+            {isLoadingRevenue || isLoadingTransactions ? '...' : `R${last7DaysRevenue.toFixed(2)}`}
+          </Text>
+          <Text style={styles.motivationalText}>
+            {isLoadingRevenue || isLoadingTransactions ? 'Loading revenue...' : 
+             revenueError ? 'Error loading revenue' : motivationalText}
+          </Text>
         </View>
 
         {/* Action Buttons */}
@@ -110,39 +207,79 @@ export default function SalesScreen() {
           style={styles.sectionHeader}
           onPress={handleSalesHistoryPress}
         >
-          <Text style={styles.sectionTitle}>Sales history</Text>
-          <ChevronRight size={20} color="#8E8E93" />
+          <Text style={styles.sectionTitle}>
+            Sales history {transactions && transactions.length > 10 && 
+              `(${showAllTransactions ? 'all' : '10'} of ${transactions.length})`}
+          </Text>
+          <ChevronRight 
+            size={20} 
+            color="#8E8E93" 
+            style={{ transform: [{ rotate: showAllTransactions ? '90deg' : '0deg' }] }}
+          />
         </TouchableOpacity>
 
         {/* Transaction List */}
         <View style={styles.transactionContainer}>
-          {salesHistory.map((transaction) => (
-            <TouchableOpacity
-              key={transaction.id}
-              style={styles.transactionItem}
-              onPress={() => handleTransactionPress(transaction)}
+          {isLoadingTransactions ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#0C7C59" />
+              <Text style={styles.loadingText}>Loading transactions...</Text>
+            </View>
+          ) : transactionError ? (
+            <View style={styles.errorContainer}>
+              <AlertCircle size={20} color="#FF3B30" />
+              <Text style={styles.errorText}>Failed to load transactions</Text>
+              <TouchableOpacity onPress={refreshTransactions} style={styles.retryButton}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : salesHistory.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No transactions yet</Text>
+              <Text style={styles.emptySubtext}>Your sales will appear here</Text>
+            </View>
+          ) : (
+            salesHistory.map((transaction) => (
+              <TouchableOpacity
+                key={transaction.id}
+                style={styles.transactionItem}
+                onPress={() => handleTransactionPress(transaction)}
+              >
+                <View style={styles.transactionLeft}>
+                  <View style={styles.transactionIcon}>
+                    {transaction.type === 'Payment' ? (
+                      <RotateCcw size={16} color="#8E8E93" />
+                    ) : (
+                      <CheckCircle size={16} color="#0C7C59" />
+                    )}
+                  </View>
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionType}>{transaction.type}</Text>
+                    <Text style={styles.transactionStatus}>{transaction.status}</Text>
+                    <Text style={styles.transactionTime}>{formatDate(transaction.timestamp)}</Text>
+                  </View>
+                </View>
+                <Text style={[
+                  styles.transactionAmount,
+                  { color: transaction.amount < 0 ? '#FF3B30' : '#1C1C1E' }
+                ]}>
+                  {transaction.amount < 0 ? '-' : '+'}{transaction.currency} {Math.abs(transaction.amount).toFixed(2)}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
+          
+          {/* Load More Button - only show if there are more transactions and not showing all */}
+          {!showAllTransactions && transactions && transactions.length > displayLimit && (
+            <TouchableOpacity 
+              style={styles.loadMoreButton}
+              onPress={handleLoadMore}
             >
-              <View style={styles.transactionLeft}>
-                <View style={styles.transactionIcon}>
-                  {transaction.status === 'Refunded' ? (
-                    <RotateCcw size={16} color="#8E8E93" />
-                  ) : (
-                    <CheckCircle size={16} color="#0C7C59" />
-                  )}
-                </View>
-                <View style={styles.transactionDetails}>
-                  <Text style={styles.transactionType}>{transaction.type}</Text>
-                  <Text style={styles.transactionStatus}>{transaction.status}</Text>
-                </View>
-              </View>
-              <Text style={[
-                styles.transactionAmount,
-                { color: transaction.amount < 0 ? '#FF3B30' : '#1C1C1E' }
-              ]}>
-                {transaction.amount < 0 ? '-' : ''}R{Math.abs(transaction.amount).toFixed(2)}
+              <Text style={styles.loadMoreText}>
+                Load more ({transactions.length - displayLimit} remaining)
               </Text>
             </TouchableOpacity>
-          ))}
+          )}
         </View>
 
         {/* Invoices Section */}
@@ -323,6 +460,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1C1C1E',
   },
+  transactionTime: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#FF3B30',
+  },
+  retryButton: {
+    backgroundColor: '#0C7C59',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
   invoicesSection: {
     paddingHorizontal: 20,
     marginBottom: 20,
@@ -356,5 +548,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#1C1C1E',
+  },
+  loadMoreButton: {
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F8F9FA',
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#0C7C59',
   },
 });

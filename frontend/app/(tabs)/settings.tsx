@@ -11,12 +11,15 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User, Shield, Bell, Globe, CircleHelp as HelpCircle, LogOut, CreditCard, Smartphone, Lock, Eye, FileText, Phone, Mail, ChevronRight, Users2, Building2 } from 'lucide-react-native';
 import { useAppMode } from '../../contexts/AppContext';
+import { useUserManagement } from '../../hooks/useAuth';
 import { router } from 'expo-router';
 import PersonalInfoModal from '../../components/PersonalInfoModal';
 import PaymentMethodsModal from '../../components/PaymentMethodsModal';
 import TransactionHistoryModal from '../../components/TransactionHistoryModal';
 import PinChangeModal from '../../components/PinChangeModal';
 import PrivacySettingsModal from '../../components/PrivacySettingsModal';
+import AccountDropdown from '../../components/AccountDropdown';
+import { useAccount } from '../../contexts/AccountContext';
 
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -32,6 +35,8 @@ export default function SettingsScreen() {
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   
   const { mode, setMode } = useAppMode();
+  const { logout } = useUserManagement();
+  const { selectedAccount, accounts, isLoading: accountsLoading } = useAccount();
   const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
@@ -40,7 +45,10 @@ export default function SettingsScreen() {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => console.log('Logged out') }
+        { text: 'Logout', style: 'destructive', onPress: async () => {
+          await logout();
+          router.push('/login');
+        }}
       ]
     );
   };
@@ -121,7 +129,7 @@ export default function SettingsScreen() {
               ]}
               onPress={() => {
                 setMode('consumer');
-                router.push('/(tabs)/');
+                router.push('/(tabs)');
               }}
             >
               <Users2 size={20} color={mode === 'consumer' ? '#FFFFFF' : '#0C7C59'} />
@@ -162,6 +170,35 @@ export default function SettingsScreen() {
             subtitle="Nomsa Khumalo • +27 12 345 6789"
             onPress={() => setShowPersonalInfo(true)}
           />
+          
+          {/* Account Selection */}
+          <View style={styles.accountSelectionContainer}>
+            <View style={styles.accountSelectionHeader}>
+              <View style={styles.accountSelectionIcon}>
+                <CreditCard size={18} color="#0C7C59" />
+              </View>
+              <View style={styles.accountSelectionContent}>
+                <Text style={styles.accountSelectionTitle}>Active Account</Text>
+                <Text style={styles.accountSelectionSubtitle}>
+                  {accountsLoading 
+                    ? 'Loading accounts...' 
+                    : accounts.length === 0 
+                      ? 'No accounts available' 
+                      : `Select from ${accounts.length} account${accounts.length === 1 ? '' : 's'}`
+                  }
+                </Text>
+              </View>
+            </View>
+            <View style={styles.accountDropdownContainer}>
+              <AccountDropdown 
+                onAccountSelect={(account) => {
+                  console.log('Account selected:', account?.alias || account?.account_id);
+                }}
+                disabled={accountsLoading || accounts.length === 0}
+              />
+            </View>
+          </View>
+          
           <SettingItem
             icon={<CreditCard size={18} color="#3498DB" />}
             title="Payment Methods"
@@ -603,5 +640,42 @@ const styles = StyleSheet.create({
   },
   modeOptionTextActive: {
     color: '#FFFFFF',
+  },
+  accountSelectionContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8F9FA',
+  },
+  accountSelectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  accountSelectionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8F9FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  accountSelectionContent: {
+    flex: 1,
+  },
+  accountSelectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 2,
+  },
+  accountSelectionSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8E8E93',
+  },
+  accountDropdownContainer: {
+    marginTop: 4,
   },
 });

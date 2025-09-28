@@ -11,8 +11,18 @@ export const config = {
   hedera: {
     accountId: process.env.HEDERA_ACCOUNT_ID || '',
     privateKey: process.env.HEDERA_PRIVATE_KEY || '',
-    network: (process.env.HEDERA_NETWORK as 'testnet' | 'mainnet') || 'testnet'
+    network: (process.env.HEDERA_NETWORK as 'testnet' | 'mainnet') || 'testnet',
+    usdTokenId: process.env.USD_TOKEN_ID || '',
+    usdSupplyKey: process.env.USD_SUPPLY_KEY || '',
+    zarTokenId: process.env.ZAR_TOKEN_ID || '',
+    zarSupplyKey: process.env.ZAR_SUPPLY_KEY || ''
   } as HederaConfig,
+  
+  mirrorNode: {
+    testnet: 'https://testnet.mirrornode.hedera.com',
+    mainnet: 'https://mainnet.mirrornode.hedera.com',
+    previewnet: 'https://previewnet.mirrornode.hedera.com'
+  },
   
   did: {
     hcsTopicId: process.env.HCS_TOPIC_ID || '' // Optional: if not provided, will create a new topic
@@ -25,6 +35,11 @@ export const config = {
   externalApi: {
     baseUrl: process.env.EXTERNAL_API_URL || 'https://api.example.com',
     apiKey: process.env.EXTERNAL_API_KEY || 'demo-key'
+  },
+
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    ttlSeconds: parseInt(process.env.REDIS_TTL_SECONDS || '30')
   }
 };
 

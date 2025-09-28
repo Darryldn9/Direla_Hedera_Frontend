@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { CreditCard, Plus, Eye, EyeOff, ArrowUpRight, ArrowDownLeft, ShoppingCart, Users, Minus, Zap } from 'lucide-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppMode } from '../../contexts/AppContext';
-import VirtualCard from '../../components/VirtualCard';
-import AppleWalletModal from '../../components/AppleWalletModal';
+import { useAppMode } from '@/contexts/AppContext';
+import VirtualCard from '@/components/VirtualCard';
+import AppleWalletModal from '@/components/AppleWalletModal';
+import { useUserManagement } from '@/hooks/useAuth';
+import { useAccount } from '@/contexts/AccountContext';
+import { useTransactionHistory } from '@/hooks/useTransactionHistory';
+import { useHederaOperations } from '@/hooks/useHedera';
+import { useQuote } from '@/hooks/useQuote';
+import moment from 'moment';
 import DepositModal from '../../components/DepositModal';
 import SendModal from '../../components/SendModal';
 import RequestModal from '../../components/RequestModal';
@@ -19,7 +25,7 @@ interface Transaction {
   status: 'completed' | 'pending';
 }
 
-export default function WalletScreen() {
+function WalletScreen() {
   const [showBalance, setShowBalance] = useState(true);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -29,59 +35,158 @@ export default function WalletScreen() {
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
 
+  const { currentUser } = useUserManagement();
+
+  const { selectedAccount, debugState } = useAccount();
+  const { getMultiCurrencyBalance } = useHederaOperations();
+  const { generateQuote } = useQuote();
+  const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
+
+  // Fetch transaction history for the selected account
+  const {
+    transactions: hederaTransactions,
+    isLoading: isLoadingTransactions,
+    error: transactionError,
+    refresh: refreshTransactions,
+    lastUpdated: transactionLastUpdated
+  } = useTransactionHistory(accountId, 10);
+
+  // State for live balance
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  
+  // State for converted transactions
+  const [convertedTransactions, setConvertedTransactions] = useState<Array<{
+    transaction: any;
+    displayAmount: number;
+    displayCurrency: string;
+  }>>([]);
+
+  // Fetch live balance function using the existing multicurrency system
+  const fetchLiveBalance = async () => {
+    if (!selectedAccount?.account_id) {
+      setLiveBalance(0);
+      setBalanceLoading(false);
+      return;
+    }
+
+    setBalanceLoading(true);
+    try {
+      const balance = await getMultiCurrencyBalance(selectedAccount.account_id);
+      if (balance && balance.balances && balance.balances.length > 0) {
+        // Find the balance for the account's currency from the database
+        const accountCurrency = selectedAccount.currency || 'HBAR';
+        const currencyBalance = balance.balances.find(b => b.code === accountCurrency);
+        
+        if (currencyBalance) {
+          setLiveBalance(currencyBalance.amount);
+        } else {
+          // Fallback to HBAR if account currency not found
+          const hbarBalance = balance.balances.find(b => b.code === 'HBAR');
+          setLiveBalance(hbarBalance?.amount ?? 0);
+        }
+      } else {
+        setLiveBalance(0);
+      }
+    } catch (error) {
+      console.error('Error fetching live balance:', error);
+      setLiveBalance(0);
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  // Fetch live balance when account changes
+  useEffect(() => {
+    fetchLiveBalance();
+  }, [selectedAccount?.account_id]);
+
+  // Convert transactions when they change
+  useEffect(() => {
+    const convertTransactions = async () => {
+      if (!hederaTransactions.length || !selectedAccount?.currency) {
+        setConvertedTransactions([]);
+        return;
+      }
+
+      const accountCurrency = selectedAccount.currency;
+      const filteredTransactions = hederaTransactions.filter(transaction => 
+        transaction.currency !== 'HBAR'
+      );
+
+      const converted = await Promise.all(
+        filteredTransactions.map(async (transaction) => {
+          const converted = await convertTransactionAmount(
+            transaction.amount,
+            transaction.currency,
+            accountCurrency
+          );
+          return {
+            transaction,
+            displayAmount: converted.amount,
+            displayCurrency: converted.currency
+          };
+        })
+      );
+
+      setConvertedTransactions(converted);
+    };
+
+    convertTransactions();
+  }, [hederaTransactions, selectedAccount?.currency, accountId]);
+
+  // Function to convert transaction amount to account currency
+  const convertTransactionAmount = async (amount: number, fromCurrency: string, toCurrency: string): Promise<{ amount: number; currency: string }> => {
+    if (fromCurrency === toCurrency) {
+      return { amount, currency: fromCurrency };
+    }
+
+    try {
+      // Use the existing quote system to get exchange rate
+      const quote = await generateQuote({
+        fromAccountId: accountId || '',
+        toAccountId: accountId || '', // Same account for conversion
+        amount: amount,
+        fromCurrency: fromCurrency,
+        toCurrency: toCurrency
+      });
+
+      if (quote) {
+        return {
+          amount: quote.toAmount,
+          currency: toCurrency
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to convert currency, showing original:', error);
+    }
+
+    // Fallback to original amount if conversion fails
+    return { amount, currency: fromCurrency };
+  };
+
+  const balance = liveBalance ?? 0;
+  
+  // Console log loading and error states
+  useEffect(() => {
+    if (isLoadingTransactions) {
+      console.log('Loading transaction history...');
+    }
+    if (transactionError) {
+      console.error('Transaction history error:', transactionError);
+    }
+  }, [isLoadingTransactions, transactionError]);
+
   // Mode-aware data
   const businessName = "Mama Thandi's Spaza Shop";
   const personalName = "Nomsa Khumalo";
   const userInitials = "NK"; // For consumer mode
   const businessInitials = "MT"; // For business mode
   
-  const balance = 2847.50;
   const cardNumber = '4532 1234 5678 9012';
   const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
   const expiryDate = '12/28';
 
-  const recentTransactions: Transaction[] = [
-    {
-      id: '1',
-      type: 'received',
-      amount: 250.00,
-      description: 'Payment from Thabo M.',
-      timestamp: '2 hours ago',
-      status: 'completed',
-    },
-    {
-      id: '2',
-      type: 'sent',
-      amount: 85.50,
-      description: 'Mama Thandi\'s Spaza',
-      timestamp: '5 hours ago',
-      status: 'completed',
-    },
-    {
-      id: '3',
-      type: 'topup',
-      amount: 500.00,
-      description: 'Wallet top-up',
-      timestamp: '1 day ago',
-      status: 'completed',
-    },
-    {
-      id: '4',
-      type: 'sent',
-      amount: 32.75,
-      description: 'WhatsApp Pay to Lerato',
-      timestamp: '2 days ago',
-      status: 'completed',
-    },
-    {
-      id: '5',
-      type: 'received',
-      amount: 120.00,
-      description: 'Business payment',
-      timestamp: '3 days ago',
-      status: 'completed',
-    },
-  ];
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
@@ -91,6 +196,8 @@ export default function WalletScreen() {
         return <ArrowDownLeft size={20} color="#0C7C59" />;
       case 'topup':
         return <Zap size={20} color="#3498DB" />;
+      case 'burn':
+        return <Minus size={20} color="#F39C12" />;
       default:
         return <ShoppingCart size={20} color="#7F8C8D" />;
     }
@@ -117,19 +224,44 @@ export default function WalletScreen() {
 
         {/* Page Title */}
         <View style={styles.titleContainer}>
-          <Text style={styles.pageTitle}>Wallet</Text>
-          <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
+          <View style={styles.titleRow}>
+            <View>
+              <Text style={styles.pageTitle}>Wallet</Text>
+              <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
+            </View>
+             <View style={styles.buttonRow}>
+               <TouchableOpacity
+                 onPress={() => {
+                   fetchLiveBalance();
+                   refreshTransactions();
+                 }}
+                 style={styles.refreshButton}
+               >
+                 <Text style={styles.refreshButtonText}>
+                   {balanceLoading ? 'Loading...' : 'Refresh'}
+                 </Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+                 onPress={debugState}
+                 style={[styles.refreshButton, { backgroundColor: '#FF6B6B', marginLeft: 8 }]}
+               >
+                 <Text style={styles.refreshButtonText}>Debug</Text>
+               </TouchableOpacity>
+             </View>
+          </View>
         </View>
 
         <View style={styles.cardContainer}>
-          <VirtualCard 
-            balance={balance} 
+          <VirtualCard
+            balance={balance}
+            currency={selectedAccount?.currency}
             cardNumber={cardNumber}
             expiryDate={expiryDate}
             holderName={holderName}
-            showBalance={showBalance} 
+            showBalance={showBalance}
             onAddToWallet={() => setShowWalletModal(true)}
             onToggleBalance={() => setShowBalance(!showBalance)}
+            isLoading={balanceLoading}
           />
         </View>
 
@@ -169,37 +301,134 @@ export default function WalletScreen() {
         <View style={styles.transactionsSection}>
           <View style={styles.transactionsHeader}>
             <Text style={styles.sectionTitle}>Recent Transactions</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View All</Text>
+            <TouchableOpacity onPress={refreshTransactions}>
+              <Text style={styles.viewAllText}>
+                {isLoadingTransactions ? 'Loading...' : 'Refresh'}
+              </Text>
             </TouchableOpacity>
           </View>
           
-          {recentTransactions.map((transaction) => (
-            <TouchableOpacity key={transaction.id} style={styles.transactionItem}>
-              <View style={styles.transactionIcon}>
-                {getTransactionIcon(transaction.type)}
-              </View>
-              <View style={styles.transactionDetails}>
-                <Text style={styles.transactionDescription}>{transaction.description}</Text>
-                <Text style={styles.transactionTime}>{transaction.timestamp}</Text>
-              </View>
-              <View style={styles.transactionAmount}>
-                <Text style={[
-                  styles.transactionAmountText,
-                  { 
-                    color: transaction.type === 'sent' ? '#E74C3C' : '#0C7C59' 
-                  }
-                ]}>
-                  {transaction.type === 'sent' ? '-' : '+'}R {transaction.amount.toFixed(2)}
-                </Text>
-                <View style={[
-                  styles.statusDot,
-                  { backgroundColor: transaction.status === 'completed' ? '#0C7C59' : '#F1C40F' }
-                ]} />
-              </View>
-            </TouchableOpacity>
-          ))}
+          {isLoadingTransactions ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading transactions...</Text>
+            </View>
+          ) : convertedTransactions.length > 0 ? (
+            convertedTransactions.map(({ transaction, displayAmount, displayCurrency }) => {
+              const getTransactionDescription = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return `Sent to ${transaction.toAlias}`;
+                  case 'RECEIVE':
+                    return `Received from ${transaction.fromAlias}`;
+                  case 'BURN':
+                    return `Paid ${displayAmount.toFixed(2)} ${displayCurrency}`;
+                  default:
+                    return 'Transaction';
+                }
+              };
+
+              const getTransactionIconType = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return 'sent';
+                  case 'RECEIVE':
+                    return 'received';
+                  case 'BURN':
+                    return 'burn';
+                  default:
+                    return 'sent';
+                }
+              };
+
+              const getAmountColor = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return '#E74C3C';
+                  case 'RECEIVE':
+                    return '#0C7C59';
+                  case 'BURN':
+                    return '#F39C12';
+                  default:
+                    return '#7F8C8D';
+                }
+              };
+
+              const getAmountPrefix = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return '-';
+                  case 'RECEIVE':
+                    return '+';
+                  case 'BURN':
+                    return '-';
+                  default:
+                    return '';
+                }
+              };
+
+              return (
+                <TouchableOpacity key={transaction.transactionId} style={styles.transactionItem}>
+                  <View style={styles.transactionIcon}>
+                    {getTransactionIcon(getTransactionIconType())}
+                  </View>
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionDescription}>
+                      {getTransactionDescription()}
+                    </Text>
+                    <Text style={styles.transactionTime}>
+                      {moment(transaction.time).fromNow()}
+                    </Text>
+                  </View>
+                  <View style={styles.transactionAmount}>
+                    <Text style={[
+                      styles.transactionAmountText,
+                      { color: getAmountColor() }
+                    ]}>
+                      {getAmountPrefix()}{displayAmount.toFixed(2)} {displayCurrency}
+                    </Text>
+                    <View style={[
+                      styles.statusDot,
+                      { backgroundColor: '#0C7C59' } // All transactions are completed
+                    ]} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No transactions yet</Text>
+              <Text style={styles.emptySubtext}>Your transaction history will appear here</Text>
+            </View>
+          )}
         </View>
+
+        {/* Debug Section - Hedera Transaction History */}
+        {hederaTransactions.length > 0 && (
+          <View style={styles.debugSection}>
+            <Text style={styles.debugTitle}>🔍 Hedera Transaction History (Debug)</Text>
+            <Text style={styles.debugText}>
+              Account: {selectedAccount?.account_id}
+            </Text>
+            <Text style={styles.debugText}>
+              Total Transactions: {hederaTransactions.length}
+            </Text>
+            <Text style={styles.debugText}>
+              Non-HBAR Transactions: {hederaTransactions.filter(t => t.currency !== 'HBAR').length}
+            </Text>
+            <Text style={styles.debugText}>
+              Burn Transactions: {hederaTransactions.filter(t => t.type === 'BURN').length}
+            </Text>
+            <Text style={styles.debugText}>
+              Converted Transactions: {convertedTransactions.length}
+            </Text>
+            <Text style={styles.debugText}>
+              Account Currency: {selectedAccount?.currency || 'HBAR'}
+            </Text>
+            {transactionError && (
+              <Text style={styles.debugError}>Error: {transactionError}</Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.features}>
           <View style={styles.featureItem}>
@@ -267,6 +496,8 @@ export default function WalletScreen() {
   );
 }
 
+export default React.memo(WalletScreen);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -315,6 +546,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 20,
   },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   pageTitle: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -325,6 +561,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     color: '#8E8E93',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    backgroundColor: '#0C7C59',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  refreshButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
   },
   cardContainer: {
     paddingHorizontal: 20,
@@ -473,5 +724,55 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+  },
+  debugSection: {
+    backgroundColor: '#FFF3CD',
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFC107',
+  },
+  debugTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 14,
+    color: '#856404',
+    marginBottom: 4,
+  },
+  debugError: {
+    fontSize: 14,
+    color: '#DC3545',
+    marginTop: 4,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#C7C7CC',
   },
 });

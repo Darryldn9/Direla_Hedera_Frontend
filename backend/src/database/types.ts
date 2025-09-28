@@ -26,6 +26,8 @@ export type Database = {
           public_key: string
           updated_at: string
           user_id: string
+          whatsapp_phone: string | null
+          preferred_currency: string
         }
         Insert: {
           account_id: string
@@ -38,6 +40,8 @@ export type Database = {
           public_key: string
           updated_at?: string
           user_id: string
+          whatsapp_phone?: string | null
+          preferred_currency?: string
         }
         Update: {
           account_id?: string
@@ -50,6 +54,8 @@ export type Database = {
           public_key?: string
           updated_at?: string
           user_id?: string
+          whatsapp_phone?: string | null
+          preferred_currency?: string
         }
         Relationships: []
       }
@@ -60,6 +66,7 @@ export type Database = {
           id: number
           updated_at: string
           user_id: string | null
+          did?: string | null
         }
         Insert: {
           balance?: number
@@ -67,6 +74,7 @@ export type Database = {
           id?: number
           updated_at?: string
           user_id?: string | null
+          did?: string | null
         }
         Update: {
           balance?: number
@@ -74,6 +82,109 @@ export type Database = {
           id?: number
           updated_at?: string
           user_id?: string | null
+          did?: string | null
+        }
+        Relationships: []
+      }
+      cached_transactions: {
+        Row: {
+          id: number
+          account_id: string
+          transaction_id: string
+          amount: number
+          currency: string
+          gas_fee: number
+          transaction_time: number
+          to_account: string
+          from_account: string
+          from_alias: string | null
+          to_alias: string | null
+          transaction_type: 'SEND' | 'RECEIVE'
+          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
+          period_start: number
+          period_end: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          account_id: string
+          transaction_id: string
+          amount: number
+          currency?: string
+          gas_fee?: number
+          transaction_time: number
+          to_account: string
+          from_account: string
+          from_alias?: string | null
+          to_alias?: string | null
+          transaction_type: 'SEND' | 'RECEIVE'
+          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
+          period_start: number
+          period_end: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          account_id?: string
+          transaction_id?: string
+          amount?: number
+          currency?: string
+          gas_fee?: number
+          transaction_time?: number
+          to_account?: string
+          from_account?: string
+          from_alias?: string | null
+          to_alias?: string | null
+          transaction_type?: 'SEND' | 'RECEIVE'
+          period_type?: 'daily' | 'weekly' | 'monthly' | 'all'
+          period_start?: number
+          period_end?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transaction_cache_metadata: {
+        Row: {
+          id: number
+          account_id: string
+          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
+          period_start: number
+          period_end: number
+          last_updated: string
+          transaction_count: number
+          total_amount: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          account_id: string
+          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
+          period_start: number
+          period_end: number
+          last_updated: string
+          transaction_count?: number
+          total_amount?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          account_id?: string
+          period_type?: 'daily' | 'weekly' | 'monthly' | 'all'
+          period_start?: number
+          period_end?: number
+          last_updated?: string
+          transaction_count?: number
+          total_amount?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }

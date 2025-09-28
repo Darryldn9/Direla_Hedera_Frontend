@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -18,17 +18,22 @@ import {
 } from 'lucide-react-native';
 
 import NewSaleModal from '../../components/NewSaleModal';
+import { useAccount } from '../../contexts/AccountContext';
+import { useMetrics } from '../../hooks/useMetrics';
 
 export default function HubScreen() {
   const insets = useSafeAreaInsets();
   const [showNewSaleModal, setShowNewSaleModal] = useState(false);
+  const { selectedAccount } = useAccount();
+  const accountId = selectedAccount?.account_id || null;
+  const { dailyRevenue, monthlySummary, series, loading, error, refresh } = useMetrics(accountId);
   
   // Sample business data (will be updated by sales)
   const businessName = "Mama Thandi's Spaza Shop";
   const userInitials = "MT";
-  const [todaysRevenue, setTodaysRevenue] = useState(1247.50);
+  const todaysRevenue = dailyRevenue?.revenue ?? 0;
   const inventoryAlerts = 3;
-  const [monthlySales, setMonthlySales] = useState(142);
+  const monthlySales = monthlySummary?.count ?? 0;
   const isOnline = true;
 
   const handleNewSale = () => {
@@ -36,14 +41,8 @@ export default function HubScreen() {
   };
 
   const handleSaleComplete = (amount: number, method: string) => {
-    // Update today's revenue
-    setTodaysRevenue(prev => prev + amount);
-    
-    // Update monthly sales count
-    setMonthlySales(prev => prev + 1);
-    
-    // Here you could also add to transaction history, update inventory, etc.
-    console.log(`Sale completed: R${amount.toFixed(2)} via ${method}`);
+    console.log(`Sale completed: ${amount.toFixed(2)} ${selectedAccount?.currency} via ${method}`);
+    refresh();
   };
 
   const handleCardPress = (cardName: string) => {
@@ -86,7 +85,7 @@ export default function HubScreen() {
               onPress={() => handleCardPress("Today's Revenue")}
             >
               <Text style={styles.cardTitle}>Today's Revenue</Text>
-              <Text style={styles.largeNumber}>R {todaysRevenue.toFixed(2)}</Text>
+              <Text style={styles.largeNumber}>{todaysRevenue.toFixed(2)} {selectedAccount?.currency}</Text>
               <Text style={styles.cardSubtext}>Daily earnings</Text>
             </TouchableOpacity>
 
@@ -138,34 +137,17 @@ export default function HubScreen() {
           <View style={styles.graphContainer}>
             <Text style={styles.graphTitle}>Weekly Sales Overview</Text>
             <View style={styles.graphBars}>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: 40, backgroundColor: '#0C7C59' }]} />
-                <Text style={styles.barLabel}>Mon</Text>
-              </View>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: 60, backgroundColor: '#0C7C59' }]} />
-                <Text style={styles.barLabel}>Tue</Text>
-              </View>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: 35, backgroundColor: '#0C7C59' }]} />
-                <Text style={styles.barLabel}>Wed</Text>
-              </View>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: 80, backgroundColor: '#0C7C59' }]} />
-                <Text style={styles.barLabel}>Thu</Text>
-              </View>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: 55, backgroundColor: '#0C7C59' }]} />
-                <Text style={styles.barLabel}>Fri</Text>
-              </View>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: 70, backgroundColor: '#0C7C59' }]} />
-                <Text style={styles.barLabel}>Sat</Text>
-              </View>
-              <View style={styles.graphBar}>
-                <View style={[styles.bar, { height: 45, backgroundColor: '#0C7C59' }]} />
-                <Text style={styles.barLabel}>Sun</Text>
-              </View>
+              {(series || []).map((pt) => {
+                const max = Math.max(...(series || []).map(s => s.revenue), 1);
+                const height = Math.max(10, Math.round((pt.revenue / max) * 90));
+                const label = pt.date.slice(5); // MM-DD
+                return (
+                  <View key={pt.date} style={styles.graphBar}>
+                    <View style={[styles.bar, { height, backgroundColor: '#0C7C59' }]} />
+                    <Text style={styles.barLabel}>{label}</Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
         </View>

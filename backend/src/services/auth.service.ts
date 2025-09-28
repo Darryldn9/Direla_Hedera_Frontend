@@ -1,5 +1,6 @@
 import { getSupabaseClient } from '../database/connection.js';
-import { SupabaseAuthResponse } from '../types/index.js';
+import { TABLES } from '../database/schema.js';
+import { SupabaseAuthResponse, User } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 
 export class AuthService {
@@ -95,13 +96,19 @@ export class AuthService {
     }
   }
 
-  async getUserById(userId: string): Promise<any> {
+  async getUserById(userId: string): Promise<User | null> {
     const supabase = getSupabaseClient();
     
     try {
       logger.debug('Fetching user by ID from Supabase Auth', { userId });
       
       const { data: { user }, error } = await supabase.auth.getUser();
+
+      const { data: userData, error: userError } = await supabase
+        .from(TABLES.USERS)
+        .select('*')
+        .eq('user_id', userId)
+        .single();
       
       if (error) {
         logger.error('Failed to get user from Supabase Auth', { error: error.message, userId });
@@ -114,7 +121,7 @@ export class AuthService {
       }
 
       logger.debug('User found in Supabase Auth', { userId });
-      return user;
+      return userData;
     } catch (error) {
       logger.error('Error getting user from Supabase Auth', { error, userId });
       return null;
