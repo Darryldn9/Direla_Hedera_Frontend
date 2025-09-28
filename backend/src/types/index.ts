@@ -173,6 +173,14 @@ export interface HederaService {
   purgeTransactionCache(accountId: string): Promise<void>;
   refreshTransactionData(accountId: string, limit?: number): Promise<TransactionHistoryItem[]>;
   purgeAllTransactionCaches(): Promise<{ purgedCount: number; accounts: string[] }>;
+  publishTransactionToHCS(
+    transactionId: string,
+    fromAccountId: string,
+    toAccountId: string,
+    amountSent: { amount: number; currency: string },
+    amountReceived: { amount: number; currency: string },
+    memo?: string
+  ): Promise<HCSMessageResult>;
 }
 
 export interface ExternalApiService {
@@ -203,4 +211,36 @@ export interface CurrencyQuote {
   exchangeRate: number;
   expiresAt: number; // Unix timestamp
   quoteId: string;
+}
+
+// HCS Transaction Event types
+export interface HCSTransactionEvent {
+  event: 'transaction_completion';
+  transaction_id: string;
+  from_account: {
+    account_id: string;
+    alias?: string;
+  };
+  to_account: {
+    account_id: string;
+    alias?: string;
+  };
+  amount_sent: {
+    amount: number;
+    currency: string;
+  };
+  amount_received: {
+    amount: number;
+    currency: string;
+  };
+  timestamp: string;
+  platform_issuer: string;
+  memo?: string;
+}
+
+export interface HCSMessageResult {
+  success: boolean;
+  transactionId?: string;
+  explorerLink?: string;
+  error?: string;
 }

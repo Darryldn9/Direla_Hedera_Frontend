@@ -7,7 +7,9 @@ import {
   HederaAccountService,
   TransactionHistoryItem,
   CurrencyConversionRequest,
-  CurrencyQuote
+  CurrencyQuote,
+  HCSTransactionEvent,
+  HCSMessageResult
 } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { cacheGet, cacheSet, cacheKeys, cacheDel } from '../utils/redis.js';
@@ -543,6 +545,37 @@ export class HederaServiceImpl implements HederaService {
           transactionId: result.transactionId,
           tokenOperations: Object.keys(tokenOperations).length > 0 ? tokenOperations : undefined
         });
+
+        // Publish transaction completion to HCS topic
+        try {
+          const hcsResult = await this.publishTransactionToHCS(
+            result.transactionId,
+            fromAccountId,
+            toAccountId,
+            { amount: amount, currency: senderCurrency },
+            { amount: amount, currency: receiverCurrency },
+            paymentRequest.memo
+          );
+
+          if (hcsResult.success) {
+            logger.info('Transaction completion published to HCS successfully', {
+              transactionId: result.transactionId,
+              hcsTransactionId: hcsResult.transactionId,
+              explorerLink: hcsResult.explorerLink
+            });
+          } else {
+            logger.warn('Failed to publish transaction completion to HCS', {
+              transactionId: result.transactionId,
+              error: hcsResult.error
+            });
+          }
+        } catch (hcsError) {
+          logger.error('Error publishing transaction completion to HCS', {
+            transactionId: result.transactionId,
+            error: hcsError instanceof Error ? hcsError.message : 'Unknown error'
+          });
+          // Don't fail the transaction if HCS publishing fails
+        }
       } else {
         logger.error('Payment failed', { 
           fromAccountId, 
@@ -993,6 +1026,97 @@ export class HederaServiceImpl implements HederaService {
         error: error instanceof Error ? error.message : String(error)
       });
       throw error;
+    }
+  }
+
+  /**
+   * Publish transaction completion event to HCS topic
+   */
+  async publishTransactionToHCS(
+    transactionId: string,
+    fromAccountId: string,
+    toAccountId: string,
+    amountSent: { amount: number; currency: string },
+    amountReceived: { amount: number; currency: string },
+    memo?: string
+  ): Promise<HCSMessageResult> {
+    try {
+      logger.info('Publishing transaction completion to HCS', {
+        transactionId,
+        fromAccountId,
+        toAccountId,
+        amountSent,
+        amountReceived
+      });
+
+      // Get account aliases
+      const fromAccount = await this.hederaAccountService.getAccountByAccountId(fromAccountId);
+      const toAccount = await this.hederaAccountService.getAccountByAccountId(toAccountId);
+
+      // Create HCS transaction event
+      const transactionEvent: HCSTransactionEvent = {
+        event: 'transaction_completion',
+        transaction_id: transactionId,
+        from_account: {
+          account_id: fromAccountId,
+          ...(fromAccount?.alias && { alias: fromAccount.alias })
+        },
+        to_account: {
+          account_id: toAccountId,
+          ...(toAccount?.alias && { alias: toAccount.alias })
+        },
+        amount_sent: amountSent,
+        amount_received: amountReceived,
+        timestamp: new Date().toISOString(),
+        platform_issuer: 'did:hedera:testnet:platform-0.0.9999',
+        ...(memo && { memo })
+      };
+
+      // Publish to HCS topic
+      const messageString = JSON.stringify(transactionEvent);
+      const result = await this.hederaInfra.submitTopicMessage(
+        process.env.HCS_TOPIC_ID || '0.0.6880055',
+        messageString
+      );
+
+      if (result.status === 'SUCCESS') {
+        const explorerLink = `https://hashscan.io/testnet/transaction/${result.transactionId}`;
+        
+        logger.info('Transaction completion published to HCS successfully', {
+          transactionId,
+          hcsTransactionId: result.transactionId,
+          explorerLink
+        });
+
+        return {
+          success: true,
+          transactionId: result.transactionId,
+          explorerLink: explorerLink
+        };
+      } else {
+        logger.error('Failed to publish transaction completion to HCS', {
+          transactionId,
+          status: result.status,
+          error: result.message
+        });
+
+        return {
+          success: false,
+          error: result.message || `HCS publishing failed with status: ${result.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Error publishing transaction completion to HCS', {
+        transactionId,
+        fromAccountId,
+        toAccountId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 }
