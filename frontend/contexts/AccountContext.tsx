@@ -16,6 +16,7 @@ interface AccountContextType {
   selectAccount: (account: HederaAccount | null) => void;
   refreshAccounts: () => Promise<void>;
   clearAccounts: () => void;
+  debugState: () => void;
 }
 
 const AccountContext = createContext<AccountContextType | undefined>(undefined);
@@ -27,9 +28,15 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [selectedAccount, setSelectedAccount] = useState<HederaAccount | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedAccountId, setSavedAccountId] = useState<string | null>(null);
   
   const { currentUser } = useUserManagement();
   const hederaService = new HederaService();
+
+  // Load saved account ID from storage on mount
+  useEffect(() => {
+    loadSavedAccountId();
+  }, []);
 
   // Load accounts when user changes
   useEffect(() => {
@@ -40,30 +47,51 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser?.user_id]);
 
-  // Load selected account from storage when accounts change
+  // Restore selected account when accounts are loaded
   useEffect(() => {
-    if (accounts.length > 0 && !selectedAccount) {
-      loadSelectedAccountFromStorage();
+    console.log('🔄 AccountContext: Effect triggered - accounts:', accounts.length, 'savedAccountId:', savedAccountId, 'selectedAccount:', selectedAccount?.account_id);
+    if (accounts.length > 0 && savedAccountId !== null) {
+      restoreSelectedAccount();
+    } else if (accounts.length > 0 && savedAccountId === null) {
+      // No saved account, select first one
+      console.log('📱 AccountContext: No saved account, selecting first available');
+      setSelectedAccount(accounts[0]);
     }
-  }, [accounts]);
+  }, [accounts, savedAccountId]);
 
-  const loadSelectedAccountFromStorage = async () => {
+  const loadSavedAccountId = async () => {
     try {
-      const savedAccountId = await AsyncStorage.getItem(SELECTED_ACCOUNT_KEY);
+      const savedId = await AsyncStorage.getItem(SELECTED_ACCOUNT_KEY);
+      console.log('🔍 AccountContext: Loading saved account ID from storage:', savedId);
+      setSavedAccountId(savedId);
+    } catch (error) {
+      console.error('❌ AccountContext: Error loading saved account ID:', error);
+      setSavedAccountId(null);
+    }
+  };
+
+  const restoreSelectedAccount = () => {
+    try {
+      console.log('🔄 AccountContext: Restoring selected account. Saved ID:', savedAccountId, 'Available accounts:', accounts.length);
+      
       if (savedAccountId && accounts.length > 0) {
         const account = accounts.find(acc => acc.id.toString() === savedAccountId);
         if (account) {
+          console.log('✅ AccountContext: Restored saved account:', account.account_id);
           setSelectedAccount(account);
+          return;
         } else {
-          // If saved account not found, select first account
-          setSelectedAccount(accounts[0]);
+          console.log('⚠️ AccountContext: Saved account not found in current accounts, selecting first');
         }
-      } else if (accounts.length > 0) {
-        // No saved account, select first one
+      }
+      
+      // Fallback to first account if no saved account or saved account not found
+      if (accounts.length > 0) {
+        console.log('📱 AccountContext: Selecting first available account:', accounts[0].account_id);
         setSelectedAccount(accounts[0]);
       }
     } catch (error) {
-      console.error('Error loading selected account from storage:', error);
+      console.error('❌ AccountContext: Error restoring selected account:', error);
       if (accounts.length > 0) {
         setSelectedAccount(accounts[0]);
       }
@@ -102,17 +130,21 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
 
   const selectAccount = useCallback(async (account: HederaAccount | null) => {
     try {
+      console.log('🔄 AccountContext: Selecting account:', account?.account_id || 'null');
       setSelectedAccount(account);
       
       if (account) {
-        await AsyncStorage.setItem(SELECTED_ACCOUNT_KEY, account.id.toString());
-        console.log('Selected account saved to storage:', account.id);
+        const accountId = account.id.toString();
+        await AsyncStorage.setItem(SELECTED_ACCOUNT_KEY, accountId);
+        setSavedAccountId(accountId);
+        console.log('💾 AccountContext: Selected account saved to storage:', accountId);
       } else {
         await AsyncStorage.removeItem(SELECTED_ACCOUNT_KEY);
-        console.log('Selected account cleared from storage');
+        setSavedAccountId(null);
+        console.log('🗑️ AccountContext: Selected account cleared from storage');
       }
     } catch (error) {
-      console.error('Error saving selected account to storage:', error);
+      console.error('❌ AccountContext: Error saving selected account to storage:', error);
     }
   }, []);
 
@@ -124,8 +156,20 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     setAccounts([]);
     setSelectedAccount(null);
     setError(null);
+    setSavedAccountId(null);
     AsyncStorage.removeItem(SELECTED_ACCOUNT_KEY);
   }, []);
+
+  const debugState = useCallback(() => {
+    console.log('🐛 AccountContext Debug State:', {
+      accounts: accounts.length,
+      selectedAccount: selectedAccount?.account_id || 'null',
+      savedAccountId,
+      isLoading,
+      error,
+      currentUser: currentUser?.user_id || 'null'
+    });
+  }, [accounts, selectedAccount, savedAccountId, isLoading, error, currentUser]);
 
   const value: AccountContextType = {
     accounts,
@@ -136,6 +180,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     selectAccount,
     refreshAccounts,
     clearAccounts,
+    debugState,
   };
 
   // // Refresh balances when accounts are loaded

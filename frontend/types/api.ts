@@ -120,7 +120,8 @@ export interface TransactionHistoryItem {
   fromAlias: string;
   toAlias: string;
   transactionId: string;
-  type: 'SEND' | 'RECEIVE';
+  type: 'SEND' | 'RECEIVE' | 'BURN';
+  memo?: string;
 }
 
 // Transaction with DID Types

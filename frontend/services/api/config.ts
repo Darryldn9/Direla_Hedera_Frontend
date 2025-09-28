@@ -3,7 +3,7 @@ import { ApiConfig } from '../../types/api';
 // Default API configuration
 export const defaultApiConfig: ApiConfig = {
   baseUrl: 'http://localhost:3000/api',
-  timeout: 10000, // 10 seconds
+  timeout: 60000, // 60 seconds - increased for payment processing
   retryAttempts: 3,
 };
 

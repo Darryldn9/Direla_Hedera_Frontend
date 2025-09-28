@@ -104,11 +104,12 @@ export default function PayScreen() {
     selectedAccount && amount
       ? {
           toAccountId: selectedAccount.account_id,
-          amountHBAR: parseFloat(amount), // Direct HBAR input
+          amount: parseFloat(amount), // Direct HBAR input
+          currency: receiverCurrency,
           expectedMemoContains: selectedAccount.alias || selectedAccount.account_id,
-          timeoutMs: 60000,
-          intervalMs: 10000,
-          amountTolerance: Math.max(0.00000001, parseFloat(amount) * 0.01),
+          timeoutMs: 120000, // 2 minutes
+          intervalMs: 5000, // 5 seconds
+          amountTolerance: Math.max(0.00000001, parseFloat(amount) * 0.02), // 2% tolerance
         }
       : undefined
   );
@@ -171,7 +172,7 @@ export default function PayScreen() {
       // Handle successful payment
       onPaymentSuccess(parseFloat(amount));
     } else if (poller?.status === 'timeout') {
-      Alert.alert('Payment timed out', 'No payment detected within 1 minute.');
+      Alert.alert('Payment timed out', 'No payment detected within 2 minutes.');
       setAutoPollingStarted(false);
     }
   }, [poller?.status]);
@@ -405,13 +406,17 @@ export default function PayScreen() {
       // Process the payment
       const result = await makePayment(paymentRequest);
 
-      // console.log("[DEBUG] PAYMENT RESULT", result);
+      console.log("[DEBUG] PAYMENT RESULT", result);
       
-      if (result?.success && result.transactionId) {
+      if (result?.success && 'transactionId' in result && result.transactionId) {
         // Payment successful - show success toast
+        // Show user's currency amount if different from receiver's currency
+        const displayAmount = quote ? quote.fromAmount : paymentData.amount;
+        const displayCurrency = fromCurrency !== toCurrency ? fromCurrency : paymentData.currency;
+        
         showSuccess(
           'Payment Successful!',
-          `${paymentData.amount.toFixed(2)} ${paymentData.currency} sent to ${paymentData.accountAlias || paymentData.toAccountId}\nTransaction ID: ${result.transactionId}`,
+          `${displayAmount.toFixed(2)} ${displayCurrency} sent to ${paymentData.accountAlias || paymentData.toAccountId}\nTransaction ID: ${result.transactionId}`,
           5000
         );
         
@@ -420,9 +425,10 @@ export default function PayScreen() {
         setRecipient('');
       } else {
         // Payment failed - show error toast
+        const errorMessage = (result as any)?.error || 'Unknown error occurred while processing payment.';
         showError(
           'Payment Failed',
-          result?.error || 'Unknown error occurred while processing payment.',
+          errorMessage,
           5000
         );
       }
@@ -489,7 +495,7 @@ export default function PayScreen() {
 
       const result = await makePayment(paymentRequest);
       
-      if (result?.success && result.transactionId) {
+      if (result?.success && 'transactionId' in result && result.transactionId) {
         // Payment successful - show success toast
         showSuccess(
           'Payment Successful!',
@@ -502,9 +508,10 @@ export default function PayScreen() {
         setPaymentMethod(null);
       } else {
         // Payment failed - show error toast
+        const errorMessage = (result as any)?.error || 'Unknown error occurred while processing payment.';
         showError(
           'Payment Failed',
-          result?.error || 'Unknown error occurred while processing payment.',
+          errorMessage,
           5000
         );
       }

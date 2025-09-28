@@ -159,16 +159,22 @@ export class HederaService extends BaseApiService {
   /**
    * Get transaction history for a Hedera account
    */
-  async getTransactionHistory(accountId: string, limit?: number): Promise<ApiResponse<TransactionHistoryItem[]>> {
+  async getTransactionHistory(accountId: string, limit?: number, forceRefresh?: boolean): Promise<ApiResponse<TransactionHistoryItem[]>> {
     if (!isValidHederaAccountId(accountId)) {
       return {
         success: false,
         error: 'Invalid Hedera account ID format',
       } as unknown as ApiResponse<TransactionHistoryItem[]>;
     }
-    const queryParams = limit ? `?limit=${limit}` : '';
-    return this.get<TransactionHistoryItem[]>(API_ENDPOINTS.HEDERA_TRANSACTION_HISTORY(accountId) + queryParams);
+    const queryParams = new URLSearchParams();
+    if (limit) queryParams.append('limit', limit.toString());
+    if (forceRefresh) queryParams.append('forceRefresh', 'true');
+    
+    const url = API_ENDPOINTS.HEDERA_TRANSACTION_HISTORY(accountId) + 
+      (queryParams.toString() ? `?${queryParams.toString()}` : '');
+    return this.get<TransactionHistoryItem[]>(url);
   }
+
 
   /**
    * Generate a currency quote for payment

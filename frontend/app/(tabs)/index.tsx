@@ -9,6 +9,7 @@ import { useUserManagement } from '@/hooks/useAuth';
 import { useAccount } from '@/contexts/AccountContext';
 import { useTransactionHistory } from '@/hooks/useTransactionHistory';
 import { useHederaOperations } from '@/hooks/useHedera';
+import { useQuote } from '@/hooks/useQuote';
 import moment from 'moment';
 
 interface Transaction {
@@ -28,8 +29,9 @@ function WalletScreen() {
 
   const { currentUser } = useUserManagement();
 
-  const { selectedAccount } = useAccount();
+  const { selectedAccount, debugState } = useAccount();
   const { getMultiCurrencyBalance } = useHederaOperations();
+  const { generateQuote } = useQuote();
   const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
 
   // Fetch transaction history for the selected account
@@ -37,12 +39,20 @@ function WalletScreen() {
     transactions: hederaTransactions,
     isLoading: isLoadingTransactions,
     error: transactionError,
-    refresh: refreshTransactions
+    refresh: refreshTransactions,
+    lastUpdated: transactionLastUpdated
   } = useTransactionHistory(accountId, 10);
 
   // State for live balance
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
+  
+  // State for converted transactions
+  const [convertedTransactions, setConvertedTransactions] = useState<Array<{
+    transaction: any;
+    displayAmount: number;
+    displayCurrency: string;
+  }>>([]);
 
   // Fetch live balance function using the existing multicurrency system
   const fetchLiveBalance = async () => {
@@ -83,6 +93,70 @@ function WalletScreen() {
     fetchLiveBalance();
   }, [selectedAccount?.account_id]);
 
+  // Convert transactions when they change
+  useEffect(() => {
+    const convertTransactions = async () => {
+      if (!hederaTransactions.length || !selectedAccount?.currency) {
+        setConvertedTransactions([]);
+        return;
+      }
+
+      const accountCurrency = selectedAccount.currency;
+      const filteredTransactions = hederaTransactions.filter(transaction => 
+        transaction.currency !== 'HBAR'
+      );
+
+      const converted = await Promise.all(
+        filteredTransactions.map(async (transaction) => {
+          const converted = await convertTransactionAmount(
+            transaction.amount,
+            transaction.currency,
+            accountCurrency
+          );
+          return {
+            transaction,
+            displayAmount: converted.amount,
+            displayCurrency: converted.currency
+          };
+        })
+      );
+
+      setConvertedTransactions(converted);
+    };
+
+    convertTransactions();
+  }, [hederaTransactions, selectedAccount?.currency, accountId]);
+
+  // Function to convert transaction amount to account currency
+  const convertTransactionAmount = async (amount: number, fromCurrency: string, toCurrency: string): Promise<{ amount: number; currency: string }> => {
+    if (fromCurrency === toCurrency) {
+      return { amount, currency: fromCurrency };
+    }
+
+    try {
+      // Use the existing quote system to get exchange rate
+      const quote = await generateQuote({
+        fromAccountId: accountId || '',
+        toAccountId: accountId || '', // Same account for conversion
+        amount: amount,
+        fromCurrency: fromCurrency,
+        toCurrency: toCurrency
+      });
+
+      if (quote) {
+        return {
+          amount: quote.toAmount,
+          currency: toCurrency
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to convert currency, showing original:', error);
+    }
+
+    // Fallback to original amount if conversion fails
+    return { amount, currency: fromCurrency };
+  };
+
   const balance = liveBalance ?? 0;
   
   // Console log loading and error states
@@ -105,48 +179,6 @@ function WalletScreen() {
   const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
   const expiryDate = '12/28';
 
-  const recentTransactions: Transaction[] = [
-    {
-      id: '1',
-      type: 'received',
-      amount: 250.00,
-      description: 'Payment from Thabo M.',
-      timestamp: '2 hours ago',
-      status: 'completed',
-    },
-    {
-      id: '2',
-      type: 'sent',
-      amount: 85.50,
-      description: 'Mama Thandi\'s Spaza',
-      timestamp: '5 hours ago',
-      status: 'completed',
-    },
-    {
-      id: '3',
-      type: 'topup',
-      amount: 500.00,
-      description: 'Wallet top-up',
-      timestamp: '1 day ago',
-      status: 'completed',
-    },
-    {
-      id: '4',
-      type: 'sent',
-      amount: 32.75,
-      description: 'WhatsApp Pay to Lerato',
-      timestamp: '2 days ago',
-      status: 'completed',
-    },
-    {
-      id: '5',
-      type: 'received',
-      amount: 120.00,
-      description: 'Business payment',
-      timestamp: '3 days ago',
-      status: 'completed',
-    },
-  ];
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
@@ -156,6 +188,8 @@ function WalletScreen() {
         return <ArrowDownLeft size={20} color="#0C7C59" />;
       case 'topup':
         return <Zap size={20} color="#3498DB" />;
+      case 'burn':
+        return <Minus size={20} color="#F39C12" />;
       default:
         return <ShoppingCart size={20} color="#7F8C8D" />;
     }
@@ -187,17 +221,25 @@ function WalletScreen() {
               <Text style={styles.pageTitle}>Wallet</Text>
               <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => {
-                fetchLiveBalance();
-                refreshTransactions();
-              }}
-              style={styles.refreshButton}
-            >
-              <Text style={styles.refreshButtonText}>
-                {balanceLoading ? 'Loading...' : 'Refresh'}
-              </Text>
-            </TouchableOpacity>
+             <View style={styles.buttonRow}>
+               <TouchableOpacity
+                 onPress={() => {
+                   fetchLiveBalance();
+                   refreshTransactions();
+                 }}
+                 style={styles.refreshButton}
+               >
+                 <Text style={styles.refreshButtonText}>
+                   {balanceLoading ? 'Loading...' : 'Refresh'}
+                 </Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+                 onPress={debugState}
+                 style={[styles.refreshButton, { backgroundColor: '#FF6B6B', marginLeft: 8 }]}
+               >
+                 <Text style={styles.refreshButtonText}>Debug</Text>
+               </TouchableOpacity>
+             </View>
           </View>
         </View>
 
@@ -262,39 +304,88 @@ function WalletScreen() {
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Loading transactions...</Text>
             </View>
-          ) : hederaTransactions.length > 0 ? (
-            hederaTransactions.map((transaction) => (
-              <TouchableOpacity key={transaction.transactionId} style={styles.transactionItem}>
-                <View style={styles.transactionIcon}>
-                  {getTransactionIcon(transaction.type === 'SEND' ? 'sent' : 'received')}
-                </View>
-                <View style={styles.transactionDetails}>
-                  <Text style={styles.transactionDescription}>
-                    {transaction.type === 'SEND' 
-                      ? `Sent to ${transaction.toAlias}` 
-                      : `Received from ${transaction.fromAlias}`
-                    }
-                  </Text>
-                  <Text style={styles.transactionTime}>
-                    {moment(transaction.time).fromNow()}
-                  </Text>
-                </View>
-                <View style={styles.transactionAmount}>
-                  <Text style={[
-                    styles.transactionAmountText,
-                    { 
-                      color: transaction.type === 'SEND' ? '#E74C3C' : '#0C7C59' 
-                    }
-                  ]}>
-                    {transaction.type === 'SEND' ? '-' : '+'}{transaction.amount.toFixed(2)} {transaction.currency}
-                  </Text>
-                  <View style={[
-                    styles.statusDot,
-                    { backgroundColor: '#0C7C59' } // All transactions are completed
-                  ]} />
-                </View>
-              </TouchableOpacity>
-            ))
+          ) : convertedTransactions.length > 0 ? (
+            convertedTransactions.map(({ transaction, displayAmount, displayCurrency }) => {
+              const getTransactionDescription = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return `Sent to ${transaction.toAlias}`;
+                  case 'RECEIVE':
+                    return `Received from ${transaction.fromAlias}`;
+                  case 'BURN':
+                    return `Paid ${displayAmount.toFixed(2)} ${displayCurrency}`;
+                  default:
+                    return 'Transaction';
+                }
+              };
+
+              const getTransactionIconType = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return 'sent';
+                  case 'RECEIVE':
+                    return 'received';
+                  case 'BURN':
+                    return 'burn';
+                  default:
+                    return 'sent';
+                }
+              };
+
+              const getAmountColor = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return '#E74C3C';
+                  case 'RECEIVE':
+                    return '#0C7C59';
+                  case 'BURN':
+                    return '#F39C12';
+                  default:
+                    return '#7F8C8D';
+                }
+              };
+
+              const getAmountPrefix = () => {
+                switch (transaction.type) {
+                  case 'SEND':
+                    return '-';
+                  case 'RECEIVE':
+                    return '+';
+                  case 'BURN':
+                    return '-';
+                  default:
+                    return '';
+                }
+              };
+
+              return (
+                <TouchableOpacity key={transaction.transactionId} style={styles.transactionItem}>
+                  <View style={styles.transactionIcon}>
+                    {getTransactionIcon(getTransactionIconType())}
+                  </View>
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionDescription}>
+                      {getTransactionDescription()}
+                    </Text>
+                    <Text style={styles.transactionTime}>
+                      {moment(transaction.time).fromNow()}
+                    </Text>
+                  </View>
+                  <View style={styles.transactionAmount}>
+                    <Text style={[
+                      styles.transactionAmountText,
+                      { color: getAmountColor() }
+                    ]}>
+                      {getAmountPrefix()}{displayAmount.toFixed(2)} {displayCurrency}
+                    </Text>
+                    <View style={[
+                      styles.statusDot,
+                      { backgroundColor: '#0C7C59' } // All transactions are completed
+                    ]} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           ) : (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No transactions yet</Text>
@@ -311,7 +402,19 @@ function WalletScreen() {
               Account: {selectedAccount?.account_id}
             </Text>
             <Text style={styles.debugText}>
-              Transactions: {hederaTransactions.length}
+              Total Transactions: {hederaTransactions.length}
+            </Text>
+            <Text style={styles.debugText}>
+              Non-HBAR Transactions: {hederaTransactions.filter(t => t.currency !== 'HBAR').length}
+            </Text>
+            <Text style={styles.debugText}>
+              Burn Transactions: {hederaTransactions.filter(t => t.type === 'BURN').length}
+            </Text>
+            <Text style={styles.debugText}>
+              Converted Transactions: {convertedTransactions.length}
+            </Text>
+            <Text style={styles.debugText}>
+              Account Currency: {selectedAccount?.currency || 'HBAR'}
             </Text>
             {transactionError && (
               <Text style={styles.debugError}>Error: {transactionError}</Text>
@@ -410,6 +513,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     color: '#8E8E93',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   refreshButton: {
     backgroundColor: '#0C7C59',

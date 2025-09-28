@@ -43,6 +43,10 @@ export class HederaInfrastructure {
       // Initialize client
     this.client = Client.forName(config.network);
       
+      // Configure client timeouts for better reliability
+      this.client.setRequestTimeout(60000); // 60 seconds for requests
+      this.client.setMaxAttempts(3); // Retry up to 3 times
+      
       // Set operator with validation
     this.client.setOperator(this.operatorId, this.operatorKey);
     
@@ -647,14 +651,148 @@ export class HederaInfrastructure {
 
       // Use appropriate mirror node API based on network configuration
       const mirrorNodeUrl = config.mirrorNode[config.hedera.network];
-      const apiUrl = `${mirrorNodeUrl}/api/v1/transactions?account.id=${accountId}&limit=${limit}&order=desc`;
+      
+      // Fetch all transactions for the account using the correct endpoint
+      const transactionsResponse = await this.fetchFromMirrorNode(
+        `${mirrorNodeUrl}/api/v1/transactions?account.id=${accountId}&limit=${limit}&order=desc`
+      );
 
-      logger.debug('Making request to Mirror Node API', { apiUrl });
+      const transactions = transactionsResponse.transactions || [];
 
-      // Create AbortController for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      logger.debug('Mirror Node API response received', { 
+        transactionCount: transactions.length
+      });
 
+      if (transactions.length === 0) {
+        logger.info('No transactions found for account', { accountId });
+        return [];
+      }
+
+      // Parse transactions from the Mirror Node API response
+      const transactionHistoryItems: TransactionHistoryItem[] = [];
+
+      for (const transaction of transactions) {
+        const consensusTimestamp = Number(transaction.consensus_timestamp.split('.')[0]) * 1000;
+        const gasFee = transaction.charged_tx_fee || 0;
+        
+        // Process token transfers within this transaction
+        if (transaction.token_transfers && transaction.token_transfers.length > 0) {
+          for (const tokenTransfer of transaction.token_transfers) {
+            const isReceive = tokenTransfer.amount > 0;
+            const amount = Math.abs(tokenTransfer.amount);
+            const currency = this.getCurrencyFromTokenId(tokenTransfer.token_id);
+            
+            // Determine transaction type based on the transaction name
+            let type = 'TRANSFER';
+            if (transaction.name === 'TOKENMINT') {
+              type = 'MINT';
+            } else if (transaction.name === 'TOKENBURN') {
+              type = 'BURN';
+            } else if (transaction.name === 'CRYPTOTRANSFER') {
+              type = 'TRANSFER';
+            }
+
+            transactionHistoryItems.push({
+              amount,
+              currency,
+              gasFee: 0, // Token transfers don't have separate gas fees
+              time: consensusTimestamp,
+              to: isReceive ? accountId : tokenTransfer.account,
+              from: isReceive ? tokenTransfer.account : accountId,
+              fromAlias: isReceive ? tokenTransfer.account : accountId,
+              toAlias: isReceive ? accountId : tokenTransfer.account,
+              transactionId: transaction.transaction_id,
+              type: type as 'TRANSFER' | 'MINT' | 'BURN',
+              memo: transaction.memo_base64 ? Buffer.from(transaction.memo_base64, 'base64').toString() : ''
+            });
+          }
+        }
+
+        // Process HBAR transfers (if any)
+        if (transaction.transfers && transaction.transfers.length > 0) {
+          for (const transfer of transaction.transfers) {
+            // Skip fee transfers and transfers to/from the account itself
+            if (transfer.account === accountId || transfer.amount === 0) {
+              continue;
+            }
+
+            const isReceive = transfer.amount > 0;
+            const amount = Math.abs(transfer.amount) / 100000000; // Convert tinybars to HBAR
+
+            transactionHistoryItems.push({
+              amount,
+              currency: 'HBAR',
+              gasFee: 0,
+              time: consensusTimestamp,
+              to: isReceive ? accountId : transfer.account,
+              from: isReceive ? transfer.account : accountId,
+              fromAlias: isReceive ? transfer.account : accountId,
+              toAlias: isReceive ? accountId : transfer.account,
+              transactionId: transaction.transaction_id,
+              type: 'TRANSFER',
+              memo: transaction.memo_base64 ? Buffer.from(transaction.memo_base64, 'base64').toString() : ''
+            });
+          }
+        }
+      }
+
+      // Sort all transactions by time (most recent first) and limit results
+      const allTransactions = transactionHistoryItems
+        .sort((a, b) => b.time - a.time)
+        .slice(0, limit);
+
+      logger.info('Transaction history retrieved from Mirror Node API', { 
+        accountId, 
+        totalCount: allTransactions.length
+      });
+
+      return allTransactions;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        logger.error('Mirror Node API request timed out', { accountId });
+      } else if(error instanceof Error) {
+        logger.error('Failed to get transaction history from Mirror Node API', { accountId, error });
+      }
+      
+      // Return empty array instead of mock data
+      logger.warn('No transaction history available - Mirror Node API failed', { accountId });
+      return [];
+    }
+  }
+
+  /**
+   * Get token ID for a given currency code
+   */
+  private getTokenIdForCurrency(currency: string): string | null {
+    const tokenMap: Record<string, string | null> = {
+      'USD': process.env.USD_TOKEN_ID || '0.0.6869755',
+      'ZAR': process.env.ZAR_TOKEN_ID || '0.0.6889204',
+      'HBAR': null // HBAR doesn't have a token ID
+    };
+    
+    return tokenMap[currency] || null;
+  }
+
+  /**
+   * Get currency code from a token ID
+   */
+  private getCurrencyFromTokenId(tokenId: string): string {
+    const currencyMap: Record<string, string> = {
+      [process.env.USD_TOKEN_ID || '0.0.6869755']: 'USD',
+      [process.env.ZAR_TOKEN_ID || '0.0.6889204']: 'ZAR'
+    };
+    
+    return currencyMap[tokenId] || 'UNKNOWN';
+  }
+
+  /**
+   * Helper method to fetch data from Mirror Node API
+   */
+  private async fetchFromMirrorNode(apiUrl: string): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    try {
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
@@ -670,114 +808,11 @@ export class HederaInfrastructure {
         throw new Error(`Mirror Node API request failed: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
-      logger.debug('Mirror Node API response received', { 
-        transactionCount: data.transactions?.length || 0 
-      });
-
-      if (!data.transactions || data.transactions.length === 0) {
-        logger.info('No transactions found for account', { accountId });
-        return [];
-      }
-
-      // Parse transactions from Mirror Node API response
-      const transactions: TransactionHistoryItem[] = data.transactions.map((tx: any) => {
-        // Extract transfer information
-        const transfers = tx.transfers || [];
-        const accountTransfers = transfers.filter((transfer: any) => 
-          transfer.account === accountId
-        );
-
-        if (accountTransfers.length === 0) {
-          // This shouldn't happen if we filtered by account.id, but just in case
-          return null;
-        }
-
-        // Determine if this is a send or receive transaction
-        const accountTransfer = accountTransfers[0];
-        const isReceive = accountTransfer.amount > 0;
-        
-        // Find the counterparty account
-        const counterpartyTransfer = transfers.find((transfer: any) => 
-          transfer.account !== accountId
-        );
-
-        const counterpartyAccount = counterpartyTransfer?.account || 'Unknown';
-        const amount = Math.abs(accountTransfer.amount) / 100000000; // Convert from tinybars to HBAR
-        const gasFee = (tx.charged_tx_fee || 0) / 100000000; // Convert from tinybars to HBAR
-
-        return {
-          amount,
-          currency: 'HBAR',
-          gasFee,
-          time: Number(tx.consensus_timestamp.split('.')[0]) * 1000,
-          to: isReceive ? accountId : counterpartyAccount,
-          from: isReceive ? counterpartyAccount : accountId,
-          fromAlias: isReceive ? counterpartyAccount : accountId, // Will be replaced with actual alias lookup
-          toAlias: isReceive ? accountId : counterpartyAccount, // Will be replaced with actual alias lookup
-          transactionId: tx.transaction_id,
-          type: isReceive ? 'RECEIVE' : 'SEND'
-        };
-      }).filter((tx: any) => tx !== null); // Remove null entries
-
-      logger.info('Transaction history retrieved from Mirror Node API', { 
-        accountId, 
-        transactionCount: transactions.length 
-      });
-
-      return transactions;
+      return await response.json();
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        logger.error('Mirror Node API request timed out', { accountId });
-      } else {
-        logger.error('Failed to get transaction history from Mirror Node API', { accountId, error });
-      }
-      
-      // Fallback to mock data if Mirror Node API fails
-      logger.warn('Falling back to mock transaction data', { accountId });
-      
-      const mockTransactions: TransactionHistoryItem[] = [
-        {
-          amount: 10.5,
-          currency: 'HBAR',
-          gasFee: 0.001,
-          time: new Date().getTime(),
-          to: accountId,
-          from: '0.0.123456',
-          fromAlias: '0.0.123456', // Will be replaced with actual alias lookup
-          toAlias: accountId, // Will be replaced with actual alias lookup
-          transactionId: '0.0.123456@1234567890.123456789',
-          type: 'RECEIVE'
-        },
-        {
-          amount: 5.0,
-          currency: 'HBAR',
-          gasFee: 0.001,
-          time: new Date(Date.now() - 3600000).getTime(), // 1 hour ago
-          to: '0.0.789012',
-          from: accountId,
-          fromAlias: accountId, // Will be replaced with actual alias lookup
-          toAlias: '0.0.789012', // Will be replaced with actual alias lookup
-          transactionId: '0.0.123456@1234567891.123456789',
-          type: 'SEND'
-        }
-      ];
-
-      return mockTransactions.slice(0, limit);
+      clearTimeout(timeoutId);
+      throw error;
     }
-  }
-
-  /**
-   * Get token ID for a given currency code
-   */
-  private getTokenIdForCurrency(currency: string): string | null {
-    const tokenMap: Record<string, string | null> = {
-      'USD': process.env.USD_TOKEN_ID || '0.0.6869755',
-      'ZAR': process.env.ZAR_TOKEN_ID || '0.0.6889204',
-      'HBAR': null // HBAR doesn't have a token ID
-    };
-    
-    return tokenMap[currency] || null;
   }
 
   /**
@@ -815,6 +850,13 @@ export class HederaInfrastructure {
         };
       }
     } catch (error) {
+      if (error instanceof Error && error.message.toUpperCase().includes('TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT')) {
+        logger.info('Token association already successful', { accountId, tokenId });
+        return {
+          transactionId: '',
+          status: 'SUCCESS'
+        };
+      }
       logger.error('Token association error', { accountId, tokenId, error });
       return {
         transactionId: '',

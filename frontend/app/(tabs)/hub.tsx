@@ -41,7 +41,7 @@ export default function HubScreen() {
   };
 
   const handleSaleComplete = (amount: number, method: string) => {
-    console.log(`Sale completed: R${amount.toFixed(2)} via ${method}`);
+    console.log(`Sale completed: ${amount.toFixed(2)} ${selectedAccount?.currency} via ${method}`);
     refresh();
   };
 
@@ -85,7 +85,7 @@ export default function HubScreen() {
               onPress={() => handleCardPress("Today's Revenue")}
             >
               <Text style={styles.cardTitle}>Today's Revenue</Text>
-              <Text style={styles.largeNumber}>R {todaysRevenue.toFixed(2)}</Text>
+              <Text style={styles.largeNumber}>{todaysRevenue.toFixed(2)} {selectedAccount?.currency}</Text>
               <Text style={styles.cardSubtext}>Daily earnings</Text>
             </TouchableOpacity>
 

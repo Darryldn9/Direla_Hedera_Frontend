@@ -154,7 +154,8 @@ export class ExternalApiInfrastructure {
       'USD': { 'HBAR': 0.05, 'EUR': 0.85, 'GBP': 0.73, 'ZAR': 15.0 },
       'EUR': { 'HBAR': 0.059, 'USD': 1.18, 'GBP': 0.86, 'ZAR': 18.0 },
       'GBP': { 'HBAR': 0.068, 'USD': 1.37, 'EUR': 1.16, 'ZAR': 20.0 },
-      'HBAR': { 'USD': 20.0, 'EUR': 16.9, 'GBP': 14.7, 'ZAR': 300.0 }
+      'HBAR': { 'USD': 20.0, 'EUR': 16.9, 'GBP': 14.7, 'ZAR': 300.0 },
+      'ZAR': { 'USD': 0.05, 'EUR': 0.85, 'GBP': 0.73, 'HBAR': 0.0033 }
     };
 
     const fromCurrency = request.fromCurrency.toUpperCase();

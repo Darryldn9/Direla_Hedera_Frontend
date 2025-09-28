@@ -52,11 +52,12 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
     selectedAccount && amount
       ? {
           toAccountId: selectedAccount.account_id,
-          amountHBAR: parseFloat(amount) / 100,
+          amount: parseFloat(amount),
+          currency: selectedAccount.currency || 'ZAR',
           expectedMemoContains: selectedAccount.alias || selectedAccount.account_id,
-          timeoutMs: 60000,
-          intervalMs: 10000,
-          amountTolerance: Math.max(0.00000001, (parseFloat(amount) / 100) * 0.01),
+          timeoutMs: 120000, // 2 minutes
+          intervalMs: 5000, // 5 seconds
+          amountTolerance: Math.max(0.01, parseFloat(amount) * 0.02), // 2% tolerance
         }
       : undefined
   );
@@ -154,7 +155,7 @@ export default function NewSaleModal({ visible, onClose, onSaleComplete }: NewSa
       setIsProcessing(false);
       setAutoPollingStarted(false);
     } else if (pollStatus === 'timeout') {
-      Alert.alert('Payment timed out', 'No payment detected within 1 minute.');
+      Alert.alert('Payment timed out', 'No payment detected within 2 minutes.');
       setAutoPollingStarted(false);
     }
   }, [pollStatus]);

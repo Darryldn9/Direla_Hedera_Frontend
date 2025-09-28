@@ -18,6 +18,9 @@ export class HederaRoutes {
     this.router.post('/payment', this.processPayment.bind(this));
     this.router.post('/quote', this.generateQuote.bind(this));
     this.router.get('/transaction-history/:accountId', this.getTransactionHistory.bind(this));
+    this.router.post('/purge-cache/:accountId', this.purgeTransactionCache.bind(this));
+    this.router.post('/refresh-data/:accountId', this.refreshTransactionData.bind(this));
+    this.router.post('/purge-all-caches', this.purgeAllTransactionCaches.bind(this));
   }
 
 
@@ -509,6 +512,213 @@ export class HederaRoutes {
       res.status(500).json({
         success: false,
         error: 'Failed to generate quote'
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /hedera/purge-cache/{accountId}:
+   *   post:
+   *     summary: Purge cached transaction data for an account
+   *     tags: [Hedera]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Hedera account ID
+   *     responses:
+   *       200:
+   *         description: Cache purged successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: "Cache purged successfully"
+   *       400:
+   *         description: Invalid account ID
+   *       500:
+   *         description: Internal server error
+   */
+  private async purgeTransactionCache(req: Request, res: Response): Promise<void> {
+    try {
+      const { accountId } = req.params;
+
+      if (!accountId) {
+        res.status(400).json({
+          success: false,
+          error: 'Account ID is required'
+        });
+        return;
+      }
+
+      if (!isValidHederaAccountId(accountId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid Hedera account ID format'
+        });
+        return;
+      }
+
+      await this.hederaService.purgeTransactionCache(accountId);
+
+      res.json({
+        success: true,
+        message: 'Cache purged successfully',
+        data: { accountId }
+      });
+    } catch (error) {
+      logger.error('POST /hedera/purge-cache failed', { error, params: req.params });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to purge cache'
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /hedera/refresh-data/{accountId}:
+   *   post:
+   *     summary: Force refresh transaction data from Mirror Node API
+   *     tags: [Hedera]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Hedera account ID
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *         description: Maximum number of transactions to fetch
+   *     responses:
+   *       200:
+   *         description: Transaction data refreshed successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/TransactionHistoryItem'
+   *                 message:
+   *                   type: string
+   *                   example: "Transaction data refreshed successfully"
+   *       400:
+   *         description: Invalid account ID
+   *       500:
+   *         description: Internal server error
+   */
+  private async refreshTransactionData(req: Request, res: Response): Promise<void> {
+    try {
+      const { accountId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+
+      if (!accountId) {
+        res.status(400).json({
+          success: false,
+          error: 'Account ID is required'
+        });
+        return;
+      }
+
+      if (!isValidHederaAccountId(accountId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid Hedera account ID format'
+        });
+        return;
+      }
+
+      const transactions = await this.hederaService.refreshTransactionData(accountId, limit);
+
+      res.json({
+        success: true,
+        data: transactions,
+        message: 'Transaction data refreshed successfully'
+      });
+    } catch (error) {
+      logger.error('POST /hedera/refresh-data failed', { error, params: req.params, query: req.query });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to refresh transaction data'
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /hedera/purge-all-caches:
+   *   post:
+   *     summary: Purge cached transaction data for all active accounts
+   *     tags: [Hedera]
+   *     responses:
+   *       200:
+   *         description: Cache purged successfully for all accounts
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     purgedCount:
+   *                       type: integer
+   *                       example: 5
+   *                       description: Number of accounts successfully purged
+   *                     accounts:
+   *                       type: array
+   *                       items:
+   *                         type: string
+   *                       example: ["0.0.123456", "0.0.789012", "0.0.345678"]
+   *                       description: List of account IDs that were purged
+   *                 message:
+   *                   type: string
+   *                   example: "Successfully purged cache for 5 accounts"
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  private async purgeAllTransactionCaches(req: Request, res: Response): Promise<void> {
+    try {
+      logger.info('POST /hedera/purge-all-caches - Purging cache for all accounts');
+      
+      const result = await this.hederaService.purgeAllTransactionCaches();
+
+      res.json({
+        success: true,
+        data: result,
+        message: `Successfully purged cache for ${result.purgedCount} accounts`
+      });
+    } catch (error) {
+      logger.error('POST /hedera/purge-all-caches failed', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to purge cache for all accounts'
       });
     }
   }

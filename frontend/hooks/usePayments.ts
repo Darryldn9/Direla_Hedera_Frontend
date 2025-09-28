@@ -45,17 +45,28 @@ export function usePaymentManager() {
   const payments = usePayments();
 
   const makePayment = useCallback(async (paymentData: ProcessPaymentWithDIDRequest) => {
-    const result = await payments.processPayment.execute(paymentData);
+    console.log("[DEBUG] MAKE PAYMENT REQUEST", paymentData);
     
-    // console.log("[DEBUG] MAKE PAYMENT RESULT", result);
+    try {
+      console.log("[DEBUG] Starting payment processing...");
+      const startTime = Date.now();
+      
+      // Use the transaction service instead of payment service for ProcessPaymentWithDIDRequest
+      const result = await api.transaction.processPaymentWithDID(paymentData);
+      
+      const processingTime = Date.now() - startTime;
+      console.log("[DEBUG] MAKE PAYMENT RESULT", result, `Processing time: ${processingTime}ms`);
     
-    if (result?.success && result.transactionId) {
+    // Handle the response structure from /transactions endpoint
+    if (result?.success && result.data?.hedera_transaction?.transactionId) {
+      const transactionId = result.data.hedera_transaction.transactionId;
+      
       // Add to pending payments
-      setPendingPayments(prev => new Set([...prev, result.transactionId!]));
+      setPendingPayments(prev => new Set([...prev, transactionId]));
       
       // Add to recent transactions
       const transaction = {
-        id: result.transactionId,
+        id: transactionId,
         type: 'payment',
         amount: paymentData.amount,
         to: paymentData.toAccountId,
@@ -66,10 +77,42 @@ export function usePaymentManager() {
       };
       
       setRecentTransactions(prev => [transaction, ...prev.slice(0, 9)]); // Keep last 10
+      
+      // Return a normalized result structure for compatibility
+      return {
+        success: true,
+        transactionId: transactionId,
+        data: result.data
+      };
     }
     
+    // Return the original result for error cases
     return result;
-  }, [payments.processPayment]);
+    } catch (error) {
+      console.error("[DEBUG] MAKE PAYMENT ERROR", error);
+      
+      // Handle specific timeout errors
+      if (error instanceof Error) {
+        if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
+          return {
+            success: false,
+            error: 'Payment request timed out. The server may be busy. Please try again in a moment.'
+          };
+        }
+        if (error.message.includes('Network error') || error.message.includes('fetch')) {
+          return {
+            success: false,
+            error: 'Network error occurred. Please check your connection and try again.'
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }, []);
 
   const makeTransfer = useCallback(async (transferData: TransferRequest) => {
     const result = await payments.transferHbar.execute(transferData);

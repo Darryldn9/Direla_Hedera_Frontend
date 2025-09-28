@@ -85,7 +85,8 @@ export interface TransactionHistoryItem {
   fromAlias: string;
   toAlias: string;
   transactionId: string;
-  type: 'SEND' | 'RECEIVE';
+  type: 'SEND' | 'RECEIVE' | 'BURN' | 'TRANSFER' | 'MINT';
+  memo?: string;
 }
 
 // API Response types
@@ -163,12 +164,15 @@ export interface HederaService {
   createAccount(initialBalance: number, alias?: string): Promise<{ accountId: string; privateKey: string; publicKey: string }>;
   getAccountInfo(accountId: string): Promise<any>;
   processPayment(paymentRequest: PaymentRequest): Promise<HederaTransactionResult>;
-  getTransactionHistory(accountId: string, limit?: number): Promise<TransactionHistoryItem[]>;
+  getTransactionHistory(accountId: string, limit?: number, forceRefresh?: boolean): Promise<TransactionHistoryItem[]>;
   generatePaymentQuote(fromAccountId: string, toAccountId: string, amount: number, fromCurrency?: string, toCurrency?: string): Promise<CurrencyQuote>;
   associateToken(accountId: string, tokenId: string, privateKey: string): Promise<HederaTransactionResult>;
   mintToken(tokenId: string, amount: number, toAccountId?: string): Promise<HederaTransactionResult>;
   burnToken(tokenId: string, amount: number, fromAccountId: string, privateKey: string): Promise<HederaTransactionResult>;
   transferToken(tokenId: string, fromAccountId: string, toAccountId: string, amount: number, fromPrivateKey: string): Promise<HederaTransactionResult>;
+  purgeTransactionCache(accountId: string): Promise<void>;
+  refreshTransactionData(accountId: string, limit?: number): Promise<TransactionHistoryItem[]>;
+  purgeAllTransactionCaches(): Promise<{ purgedCount: number; accounts: string[] }>;
 }
 
 export interface ExternalApiService {

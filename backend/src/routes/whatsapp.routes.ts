@@ -149,24 +149,25 @@ async function handleBalance(phoneNumber: string): Promise<string> {
 
   try {
     const hederaInfra = new HederaInfrastructure(config.hedera);
-    const balance = await hederaInfra.getAccountBalance(account.account_id);
+    const balanceData = await hederaInfra.getAccountBalance(account.account_id);
+    const hbarBalance = balanceData.find(b => b.code === 'HBAR')?.amount || 0;
 
     // Update database balance to keep it in sync
     try {
       const supabase = getSupabaseClient();
       await supabase
         .from('hedera_accounts')
-        .update({ balance: balance })
+        .update({ balance: hbarBalance })
         .eq('account_id', account.account_id);
 
-      console.log(`Updated database balance for ${account.account_id}: ${balance} HBAR`);
+      console.log(`Updated database balance for ${account.account_id}: ${hbarBalance} HBAR`);
     } catch (balanceUpdateError) {
       console.error('Failed to update database balance during balance check:', balanceUpdateError);
       // Don't fail the balance response if database update fails
     }
 
     const alias = account.alias ? ` (${account.alias})` : '';
-    return `💰 Account Balance\n\n${account.account_id}${alias}\nBalance: ${balance} HBAR`;
+    return `💰 Account Balance\n\n${account.account_id}${alias}\nBalance: ${hbarBalance} HBAR`;
 
   } catch (error) {
     console.error('Balance check error:', error);
@@ -212,7 +213,8 @@ async function handlePayment(phoneNumber: string, fullMessage: string): Promise<
     const hederaInfra = new HederaInfrastructure(config.hedera);
     
     // Check balance before attempting payment
-    const currentBalance = await hederaInfra.getAccountBalance(account.account_id);
+    const balanceData = await hederaInfra.getAccountBalance(account.account_id);
+    const currentBalance = balanceData.find(b => b.code === 'HBAR')?.amount || 0;
     if (currentBalance < amount) {
       return `Insufficient balance.\n\nAvailable: ${currentBalance} HBAR\nRequired: ${amount} HBAR`;
     }
@@ -230,7 +232,8 @@ async function handlePayment(phoneNumber: string, fullMessage: string): Promise<
         const supabase = getSupabaseClient();
 
         // Update sender's balance
-        const senderNewBalance = await hederaInfra.getAccountBalance(account.account_id);
+        const senderBalanceData = await hederaInfra.getAccountBalance(account.account_id);
+        const senderNewBalance = senderBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
         await supabase
           .from('hedera_accounts')
           .update({ balance: senderNewBalance })
@@ -240,7 +243,8 @@ async function handlePayment(phoneNumber: string, fullMessage: string): Promise<
 
         // Update receiver's balance if they have an account in our database
         try {
-          const receiverNewBalance = await hederaInfra.getAccountBalance(toAccountId);
+          const receiverBalanceData = await hederaInfra.getAccountBalance(toAccountId);
+          const receiverNewBalance = receiverBalanceData.find(b => b.code === 'HBAR')?.amount || 0;
           await supabase
             .from('hedera_accounts')
             .update({ balance: receiverNewBalance })

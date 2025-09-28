@@ -329,11 +329,9 @@ export class HederaServiceImpl implements HederaService {
         });
 
         // Check sender has sufficient tokens
-        const fromTokenBalanceBaseUnits = fromBalanceData.find(b => b.code === senderCurrency)?.amount || 0;
-        const fromTokenBalance = fromBaseUnits(fromTokenBalanceBaseUnits, senderCurrency);
+        const fromTokenBalance = fromBalanceData.find(b => b.code === senderCurrency)?.amount || 0;
         logger.info('Token balance check', {
           senderCurrency,
-          fromTokenBalanceBaseUnits,
           fromTokenBalance,
           requiredAmount: burnAmount,
           hasSufficientBalance: fromTokenBalance >= burnAmount
@@ -381,7 +379,7 @@ export class HederaServiceImpl implements HederaService {
         
         try {
           const associateResult = await this.associateToken(toAccountId, toTokenId, (toAccount as any).private_key);
-          if (associateResult.status !== 'SUCCESS' && !associateResult.message?.toLowerCase().includes('already associated')) {
+          if (associateResult.status !== 'SUCCESS' && !associateResult.message?.toLowerCase().includes('TOKEN_ALREADY_ASSOCIATED_TO_ACCOUNT')) {
             logger.warn('Token association failed, but continuing with mint attempt', {
               toTokenId,
               toAccountId,
@@ -573,9 +571,9 @@ export class HederaServiceImpl implements HederaService {
     }
   }
 
-  async getTransactionHistory(accountId: string, limit: number = 50): Promise<TransactionHistoryItem[]> {
+  async getTransactionHistory(accountId: string, limit: number = 50, forceRefresh: boolean = false): Promise<TransactionHistoryItem[]> {
     try {
-      logger.info('Getting transaction history', { accountId, limit });
+      logger.info('Getting transaction history', { accountId, limit, forceRefresh });
 
       // Validate account exists in our database
       const account = await this.hederaAccountService.getAccountByAccountId(accountId);
@@ -587,15 +585,21 @@ export class HederaServiceImpl implements HederaService {
         throw new Error(`Account ${accountId} is not active`);
       }
 
-      // Try cache first
+      // Try cache first (unless force refresh is requested)
       const key = cacheKeys.txHistory(accountId);
-      const cached = await cacheGet<TransactionHistoryItem[]>(key);
       let transactions: TransactionHistoryItem[] | null = null;
-      if (cached && Array.isArray(cached)) {
-        logger.debug('Transaction history served from cache', { accountId, count: cached.length });
-        transactions = cached;
-      } else {
-        // Get transaction history from infrastructure layer (Mirror Node)
+      
+      if (!forceRefresh) {
+        const cached = await cacheGet<TransactionHistoryItem[]>(key);
+        if (cached && Array.isArray(cached)) {
+          logger.debug('Transaction history served from cache', { accountId, count: cached.length });
+          transactions = cached;
+        }
+      }
+
+      // If no cached data or force refresh, fetch from Mirror Node
+      if (!transactions || transactions.length === 0) {
+        logger.info('Fetching fresh transaction data from Mirror Node API', { accountId, forceRefresh });
         transactions = await this.hederaInfra.getTransactionHistory(accountId, limit);
         // Store in cache
         await cacheSet<TransactionHistoryItem[]>(key, transactions);
@@ -618,7 +622,8 @@ export class HederaServiceImpl implements HederaService {
 
       logger.info('Transaction history retrieved successfully', { 
         accountId, 
-        transactionCount: enrichedTransactions.length 
+        transactionCount: enrichedTransactions.length,
+        fromCache: !forceRefresh && transactions !== null
       });
 
       return enrichedTransactions;
@@ -628,6 +633,97 @@ export class HederaServiceImpl implements HederaService {
         limit, 
         error 
       });
+      throw error;
+    }
+  }
+
+  /**
+   * Purge all cached transaction data for an account
+   */
+  async purgeTransactionCache(accountId: string): Promise<void> {
+    try {
+      logger.info('Purging transaction cache for account', { accountId });
+
+      // Clear Redis cache
+      const key = cacheKeys.txHistory(accountId);
+      await cacheDel(key);
+
+      // Clear any other related caches
+      const balanceKey = cacheKeys.balance(accountId);
+      await cacheDel(balanceKey);
+
+      logger.info('Transaction cache purged successfully', { accountId });
+    } catch (error) {
+      logger.error('Failed to purge transaction cache', { accountId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Force refresh transaction data from Mirror Node API
+   */
+  async refreshTransactionData(accountId: string, limit: number = 50): Promise<TransactionHistoryItem[]> {
+    try {
+      logger.info('Force refreshing transaction data from Mirror Node', { accountId, limit });
+      
+      // First purge existing cache
+      await this.purgeTransactionCache(accountId);
+      
+      // Then fetch fresh data
+      return await this.getTransactionHistory(accountId, limit, true);
+    } catch (error) {
+      logger.error('Failed to refresh transaction data', { accountId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Purge cache for all active accounts in the database
+   */
+  async purgeAllTransactionCaches(): Promise<{ purgedCount: number; accounts: string[] }> {
+    try {
+      logger.info('Purging transaction cache for all accounts');
+
+      // Get all active accounts from the database
+      const accounts = await this.hederaAccountService.getActiveAccounts();
+      
+      if (!accounts || accounts.length === 0) {
+        logger.info('No active accounts found to purge cache for');
+        return { purgedCount: 0, accounts: [] };
+      }
+
+      const accountIds = accounts.map(account => account.account_id);
+      logger.info('Found active accounts to purge cache for', { count: accountIds.length, accountIds });
+
+      // Purge cache for each account
+      const purgePromises = accountIds.map(async (accountId) => {
+        try {
+          await this.purgeTransactionCache(accountId);
+          logger.debug('Successfully purged cache for account', { accountId });
+          return { accountId, success: true };
+        } catch (error) {
+          logger.error('Failed to purge cache for account', { accountId, error });
+          return { accountId, success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+      });
+
+      const results = await Promise.all(purgePromises);
+      const successfulPurges = results.filter(result => result.success);
+      const failedPurges = results.filter(result => !result.success);
+
+      logger.info('Cache purge completed for all accounts', { 
+        totalAccounts: accountIds.length,
+        successfulPurges: successfulPurges.length,
+        failedPurges: failedPurges.length,
+        failedAccounts: failedPurges.map(r => ({ accountId: r.accountId, error: r.error }))
+      });
+
+      return {
+        purgedCount: successfulPurges.length,
+        accounts: successfulPurges.map(r => r.accountId)
+      };
+    } catch (error) {
+      logger.error('Failed to purge cache for all accounts', { error });
       throw error;
     }
   }
