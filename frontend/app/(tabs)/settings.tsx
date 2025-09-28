@@ -19,6 +19,7 @@ import TransactionHistoryModal from '../../components/TransactionHistoryModal';
 import PinChangeModal from '../../components/PinChangeModal';
 import PrivacySettingsModal from '../../components/PrivacySettingsModal';
 import AccountDropdown from '../../components/AccountDropdown';
+import PageHeader from '../../components/PageHeader';
 import { useAccount } from '../../contexts/AccountContext';
 
 export default function SettingsScreen() {
@@ -82,11 +83,6 @@ export default function SettingsScreen() {
     <Text style={styles.sectionHeader}>{title}</Text>
   );
 
-  // Mode-aware data (consistent with other pages)
-  const businessName = "Mama Thandi's Spaza Shop";
-  const personalName = "Nomsa Khumalo";
-  const userInitials = "NK"; // For consumer mode
-  const businessInitials = "MT"; // For business mode
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]} edges={[]}>
@@ -96,16 +92,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header - Consistent with Hub/Sales/Money/Lending */}
-        <View style={styles.header}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.avatarText}>{mode === 'business' ? businessInitials : userInitials}</Text>
-          </View>
-          <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>
-              {mode === 'business' ? businessName : personalName}
-            </Text>
-          </View>
-        </View>
+        <PageHeader />
 
         {/* Page Title */}
         <View style={styles.titleContainer}>
@@ -397,39 +384,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#F5F5F7',
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0C7C59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  businessBadge: {
-    backgroundColor: '#E8E8EA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  businessBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1C1C1E',
   },
   titleContainer: {
     paddingHorizontal: 20,

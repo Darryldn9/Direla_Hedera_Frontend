@@ -15,6 +15,7 @@ import DepositModal from '../../components/DepositModal';
 import SendModal from '../../components/SendModal';
 import RequestModal from '../../components/RequestModal';
 import WithdrawModal from '../../components/WithdrawModal';
+import PageHeader from '../../components/PageHeader';
 
 interface Transaction {
   id: string;
@@ -177,11 +178,6 @@ function WalletScreen() {
     }
   }, [isLoadingTransactions, transactionError]);
 
-  // Mode-aware data
-  const businessName = "Mama Thandi's Spaza Shop";
-  const personalName = "Nomsa Khumalo";
-  const userInitials = "NK"; // For consumer mode
-  const businessInitials = "MT"; // For business mode
   
   const cardNumber = '4532 1234 5678 9012';
   const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
@@ -211,16 +207,7 @@ function WalletScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header - Consistent with other pages */}
-        <View style={styles.header}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.avatarText}>{mode === 'business' ? businessInitials : userInitials}</Text>
-          </View>
-          <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>
-              {mode === 'business' ? businessName : personalName}
-            </Text>
-          </View>
-        </View>
+        <PageHeader />
 
         {/* Page Title */}
         <View style={styles.titleContainer}>
@@ -508,39 +495,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#F5F5F7',
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0C7C59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  businessBadge: {
-    backgroundColor: '#E8E8EA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  businessBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1C1C1E',
   },
   titleContainer: {
     paddingHorizontal: 20,

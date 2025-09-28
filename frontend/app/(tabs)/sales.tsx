@@ -22,6 +22,7 @@ import {
 import { useAccount } from '../../contexts/AccountContext';
 import { useCachedTransactions } from '../../hooks/useCachedTransactions';
 import { TransactionHistoryItem } from '../../types/api';
+import PageHeader from '../../components/PageHeader';
 
 export default function SalesScreen() {
   const insets = useSafeAreaInsets();
@@ -32,7 +33,7 @@ export default function SalesScreen() {
   const [displayLimit, setDisplayLimit] = useState(10);
   
   // Get cached transaction history for the selected account
-  const { 
+  let { 
     transactions, 
     isLoading: isLoadingTransactions, 
     error: transactionError,
@@ -44,9 +45,8 @@ export default function SalesScreen() {
     fetchRevenue
   } = useCachedTransactions(selectedAccount?.account_id);
 
-  // Sample business data
-  const businessName = "Mama Thandi's Spaza Shop";
-  const userInitials = "MT";
+  transactions = transactions.filter(tx => tx.to === selectedAccount?.account_id);
+
   const motivationalText = "Today's the day to make things happen.";
 
   // Calculate revenue from cached data or fetch it
@@ -60,7 +60,7 @@ export default function SalesScreen() {
     
     const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
     return transactions
-      .filter(tx => tx.time >= sevenDaysAgo && tx.type === 'RECEIVE')
+      .filter(tx => tx.time >= sevenDaysAgo && tx.type === 'MINT')
       .reduce((sum, tx) => sum + tx.amount, 0);
   }, [revenue, transactions]);
 
@@ -73,17 +73,20 @@ export default function SalesScreen() {
     }
   }, [selectedAccount?.account_id, fetchRevenue]);
 
-  // Transform transaction history for display
+  // Transform transaction history for display - filter for incoming transactions only
   const salesHistory = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
     
-    const limit = showAllTransactions ? transactions.length : displayLimit;
-    return transactions.slice(0, limit).map((tx, index) => ({
+    // Filter for incoming transactions only (MINT type)
+    const incomingTransactions = transactions.filter(tx => tx.type === 'MINT');
+    
+    const limit = showAllTransactions ? incomingTransactions.length : displayLimit;
+    return incomingTransactions.slice(0, limit).map((tx, index) => ({
       id: tx.transactionId,
-      type: tx.type === 'SEND' ? 'Payment' : 'Sale',
+      type: 'Sale', // All incoming transactions are sales
       status: 'Completed', // All transactions from Hedera are completed
-      amount: tx.type === 'SEND' ? -tx.amount : tx.amount,
-      icon: tx.type === 'SEND' ? 'payment' : 'sale',
+      amount: tx.amount, // Incoming transactions are always positive
+      icon: 'sale',
       timestamp: tx.time,
       from: tx.fromAlias || tx.from,
       to: tx.toAlias || tx.to,
@@ -106,15 +109,17 @@ export default function SalesScreen() {
       setShowAllTransactions(false);
       setDisplayLimit(10);
     } else {
-      // If showing limited, show all transactions
+      // If showing limited, show all incoming transactions
+      const incomingCount = transactions?.filter(tx => tx.type === 'MINT').length || 0;
       setShowAllTransactions(true);
-      setDisplayLimit(transactions?.length || 10);
+      setDisplayLimit(incomingCount);
     }
   };
 
   const handleLoadMore = () => {
-    // Increase the display limit by 10 more transactions
-    setDisplayLimit(prev => Math.min(prev + 10, transactions?.length || 10));
+    // Increase the display limit by 10 more incoming transactions
+    const incomingCount = transactions?.filter(tx => tx.type === 'MINT').length || 0;
+    setDisplayLimit(prev => Math.min(prev + 10, incomingCount));
   };
 
   const handleTransactionPress = (transaction: any) => {
@@ -154,20 +159,13 @@ export default function SalesScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.avatarText}>{userInitials}</Text>
-          </View>
-          <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>{businessName}</Text>
-          </View>
-        </View>
+        <PageHeader />
 
         {/* Revenue Display */}
         <View style={styles.revenueContainer}>
           <Text style={styles.periodText}>Last 7 days</Text>
           <Text style={styles.revenueAmount}>
-            {isLoadingRevenue || isLoadingTransactions ? '...' : `R${last7DaysRevenue.toFixed(2)}`}
+            {isLoadingRevenue || isLoadingTransactions ? '...' : `${selectedAccount?.currency} ${last7DaysRevenue.toFixed(2)}`}
           </Text>
           <Text style={styles.motivationalText}>
             {isLoadingRevenue || isLoadingTransactions ? 'Loading revenue...' : 
@@ -176,7 +174,7 @@ export default function SalesScreen() {
         </View>
 
         {/* Action Buttons */}
-        <View style={styles.actionButtonsContainer}>
+        {/* <View style={styles.actionButtonsContainer}>
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => handleActionPress('Card sale')}
@@ -200,7 +198,7 @@ export default function SalesScreen() {
             <FileText size={20} color="#FFFFFF" />
             <Text style={styles.actionButtonText}>New invoice</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Sales History Section */}
         <TouchableOpacity 
@@ -208,8 +206,8 @@ export default function SalesScreen() {
           onPress={handleSalesHistoryPress}
         >
           <Text style={styles.sectionTitle}>
-            Sales history {transactions && transactions.length > 10 && 
-              `(${showAllTransactions ? 'all' : '10'} of ${transactions.length})`}
+            Incoming transactions {transactions && transactions.filter(tx => tx.type === 'MINT').length > 10 && 
+              `(${showAllTransactions ? 'all' : '10'} of ${transactions.filter(tx => tx.type === 'MINT').length})`}
           </Text>
           <ChevronRight 
             size={20} 
@@ -270,13 +268,13 @@ export default function SalesScreen() {
           )}
           
           {/* Load More Button - only show if there are more transactions and not showing all */}
-          {!showAllTransactions && transactions && transactions.length > displayLimit && (
+          {!showAllTransactions && transactions && transactions.filter(tx => tx.type === 'MINT').length > displayLimit && (
             <TouchableOpacity 
               style={styles.loadMoreButton}
               onPress={handleLoadMore}
             >
               <Text style={styles.loadMoreText}>
-                Load more ({transactions.length - displayLimit} remaining)
+                Load more ({transactions.filter(tx => tx.type === 'MINT').length - displayLimit} remaining)
               </Text>
             </TouchableOpacity>
           )}
@@ -313,39 +311,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#F5F5F7',
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0C7C59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  businessBadge: {
-    backgroundColor: '#E8E8EA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  businessBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1C1C1E',
   },
   revenueContainer: {
     alignItems: 'center',

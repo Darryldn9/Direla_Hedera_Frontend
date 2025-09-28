@@ -120,7 +120,7 @@ export interface TransactionHistoryItem {
   fromAlias: string;
   toAlias: string;
   transactionId: string;
-  type: 'SEND' | 'RECEIVE' | 'BURN';
+  type: 'SEND' | 'RECEIVE' | 'BURN' | 'TRANSFER' | 'MINT';
   memo?: string;
 }
 

@@ -33,7 +33,7 @@ export interface HederaAccount {
   created_at: string;
   updated_at: string;
   user_id: string; // UUID foreign key to users.user_id
-  preferred_currency: string; // User's preferred currency (e.g., 'USD', 'EUR', 'HBAR')
+  currency: string; // User's preferred currency (e.g., 'USD', 'EUR', 'HBAR')
 }
 
 export interface CreateHederaAccountRequest {

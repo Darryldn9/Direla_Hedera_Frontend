@@ -211,6 +211,36 @@ export type Database = {
         }
         Relationships: []
       }
+      kyc: {
+        Row: {
+          address: string | null
+          date_of_birth: string | null
+          id: number
+          id_number: string | null
+          occupation: string | null
+          phone: string | null
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          date_of_birth?: string | null
+          id?: number
+          id_number?: string | null
+          occupation?: string | null
+          phone?: string | null
+          user_id?: string
+        }
+        Update: {
+          address?: string | null
+          date_of_birth?: string | null
+          id?: number
+          id_number?: string | null
+          occupation?: string | null
+          phone?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_quotes: {
         Row: {
           created_at: string | null
