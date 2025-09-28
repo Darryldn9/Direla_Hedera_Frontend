@@ -189,6 +189,13 @@ export interface ExternalApiService {
   notifyService(request: ExternalNotificationRequest): Promise<ExternalNotificationResponse>;
 }
 
+export interface KYCService {
+  createKYC(data: CreateKYCRequest): Promise<KYCData>;
+  getKYCByUserId(userId: string): Promise<KYCData | null>;
+  updateKYC(userId: string, data: UpdateKYCRequest): Promise<KYCData | null>;
+  deleteKYC(userId: string): Promise<boolean>;
+}
+
 // Currency conversion types
 export interface CurrencyConversionRequest {
   fromCurrency: string;
@@ -268,6 +275,49 @@ export interface BNPLTerms {
   smartContractAgreementId?: string; // Smart contract agreement ID
 }
 
+// BNPL HCS Event Types
+export interface BNPLTermsCreatedEvent {
+  event: 'bnpl_terms_created';
+  terms_id: string;
+  payment_id: string;
+  buyer_account_id: string;
+  merchant_account_id: string;
+  total_amount: number;
+  currency: string;
+  installment_count: number;
+  interest_rate: number;
+  status: string;
+  expires_at: number;
+  created_at: number;
+  timestamp: string;
+  platform_issuer: string;
+}
+
+export interface BNPLTermsAcceptedEvent {
+  event: 'bnpl_terms_accepted';
+  terms_id: string;
+  payment_id: string;
+  buyer_account_id: string;
+  merchant_account_id: string;
+  smart_contract_agreement_id?: string;
+  transaction_id?: string;
+  accepted_at: number;
+  timestamp: string;
+  platform_issuer: string;
+}
+
+export interface BNPLTermsRejectedEvent {
+  event: 'bnpl_terms_rejected';
+  terms_id: string;
+  payment_id: string;
+  buyer_account_id: string;
+  merchant_account_id: string;
+  rejection_reason?: string;
+  rejected_at: number;
+  timestamp: string;
+  platform_issuer: string;
+}
+
 export interface CreateBNPLTermsRequest {
   paymentId: string;
   buyerAccountId: string;
@@ -323,4 +373,59 @@ export interface BNPLWebSocketMessage {
   type: 'TERMS_OFFERED' | 'TERMS_ACCEPTED' | 'TERMS_REJECTED' | 'TERMS_EXPIRED';
   data: BNPLTerms;
   timestamp: number;
+}
+
+// KYC Types
+export interface KYCData {
+  id: number;
+  user_id: string;
+  address: string | null;
+  date_of_birth: string | null;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  id_number: string | null;
+  occupation: string | null;
+  phone: string | null;
+}
+
+export interface CreateKYCRequest {
+  user_id: string;
+  address?: string | null;
+  date_of_birth?: string | null;
+  email?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  id_number?: string | null;
+  occupation?: string | null;
+  phone?: string | null;
+}
+
+export interface UpdateKYCRequest {
+  address?: string | null;
+  date_of_birth?: string | null;
+  email?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  id_number?: string | null;
+  occupation?: string | null;
+  phone?: string | null;
+}
+
+export interface GetKYCResponse {
+  kyc: KYCData | null;
+  success: boolean;
+  message?: string;
+}
+
+export interface CreateKYCResponse {
+  kyc: KYCData;
+  success: boolean;
+  message?: string;
+}
+
+export interface UpdateKYCResponse {
+  kyc: KYCData;
+  success: boolean;
+  message?: string;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, User, Phone, Mail, MapPin, Calendar, Briefcase } from 'lucide-react-native';
+import { X, User, Phone, Mail, MapPin, Calendar, Briefcase, Hash } from 'lucide-react-native';
+import { useKYC } from '../hooks/useKYC';
 
 interface PersonalInfo {
   firstName: string;
@@ -22,6 +24,7 @@ interface PersonalInfo {
   address: string;
   dateOfBirth: string;
   occupation: string;
+  idNumber: string;
 }
 
 interface PersonalInfoModalProps {
@@ -29,19 +32,109 @@ interface PersonalInfoModalProps {
   onClose: () => void;
 }
 
+interface InputFieldProps {
+  label: string;
+  field: keyof PersonalInfo;
+  icon: React.ReactNode;
+  placeholder?: string;
+  keyboardType?: any;
+  multiline?: boolean;
+  value: string;
+  error?: string;
+  isEditing: boolean;
+  onTextChange: (value: string) => void;
+}
+
+const InputField = React.memo(({ 
+  label, 
+  field, 
+  icon, 
+  placeholder,
+  keyboardType = 'default' as any,
+  multiline = false,
+  value,
+  error,
+  isEditing,
+  onTextChange
+}: InputFieldProps) => {
+  return (
+    <View style={styles.inputContainer}>
+      <View style={styles.inputLabel}>
+        {icon}
+        <Text style={styles.labelText}>{label}</Text>
+      </View>
+      <TextInput
+        key={`${field}-input`}
+        style={[
+          styles.input,
+          multiline && styles.multilineInput,
+          error && styles.inputError,
+          !isEditing && styles.inputDisabled
+        ]}
+        value={value}
+        onChangeText={onTextChange}
+        placeholder={placeholder}
+        keyboardType={keyboardType}
+        multiline={multiline}
+        editable={isEditing}
+        numberOfLines={multiline ? 3 : 1}
+        autoCorrect={false}
+        autoCapitalize="none"
+        selectTextOnFocus={false}
+        blurOnSubmit={false}
+      />
+      {error && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
+    </View>
+  );
+});
+
 export default function PersonalInfoModal({ visible, onClose }: PersonalInfoModalProps) {
+  const { kycData, loading, error, upsertKYC } = useKYC();
+  
+  // Debug logging to see what's causing re-renders
+  console.log('PersonalInfoModal render - visible:', visible, 'loading:', loading, 'error:', error);
+  
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
-    firstName: 'Chief',
-    lastName: 'Dreamer',
-    email: 'chief.dreamer@direla.com',
-    phone: '+27 123 456 789',
-    address: '123 Innovation Street, Cape Town, South Africa',
-    dateOfBirth: '1990-01-01',
-    occupation: 'Entrepreneur',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    dateOfBirth: '',
+    occupation: '',
+    idNumber: '',
   });
 
   const [isEditing, setIsEditing] = useState(false);
   const [errors, setErrors] = useState<Partial<PersonalInfo>>({});
+  const [saving, setSaving] = useState(false);
+  const hasLoadedKYCData = useRef(false);
+
+  // Load KYC data when modal opens (only once)
+  useEffect(() => {
+    if (visible && kycData && !hasLoadedKYCData.current) {
+      setPersonalInfo({
+        firstName: kycData.first_name || '',
+        lastName: kycData.last_name || '',
+        email: kycData.email || '',
+        phone: kycData.phone || '',
+        address: kycData.address || '',
+        dateOfBirth: kycData.date_of_birth || '',
+        occupation: kycData.occupation || '',
+        idNumber: kycData.id_number || '',
+      });
+      hasLoadedKYCData.current = true;
+    }
+  }, [visible, kycData?.user_id]); // Only depend on user_id, not the entire kycData object
+
+  // Reset the loaded flag when modal closes
+  useEffect(() => {
+    if (!visible) {
+      hasLoadedKYCData.current = false;
+    }
+  }, [visible]);
 
   const validateField = (field: keyof PersonalInfo, value: string): string | null => {
     switch (field) {
@@ -62,21 +155,29 @@ export default function PersonalInfoModal({ visible, onClose }: PersonalInfoModa
         return date > today ? 'Invalid date' : null;
       case 'occupation':
         return value.trim().length < 2 ? 'Must be at least 2 characters' : null;
+      case 'idNumber':
+        const idRegex = /^\d{13}$/;
+        return value && !idRegex.test(value.replace(/\s/g, '')) ? 'ID number must be 13 digits' : null;
       default:
         return null;
     }
   };
 
-  const handleFieldChange = (field: keyof PersonalInfo, value: string) => {
+  const handleFieldChange = useCallback((field: keyof PersonalInfo, value: string) => {
     setPersonalInfo(prev => ({ ...prev, [field]: value }));
     
     // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
-    }
-  };
+    setErrors(prev => {
+      if (prev[field]) {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      }
+      return prev;
+    });
+  }, []);
 
-  const handleSave = () => {
+  const handleSave = useCallback(async () => {
     // Validate all fields
     const newErrors: Partial<PersonalInfo> = {};
     let hasErrors = false;
@@ -96,60 +197,78 @@ export default function PersonalInfoModal({ visible, onClose }: PersonalInfoModa
       return;
     }
 
-    // Save locally (simulate API call)
-    Alert.alert(
-      'Success',
-      'Personal information updated successfully!',
-      [{ text: 'OK', onPress: () => setIsEditing(false) }]
-    );
-  };
+    setSaving(true);
 
-  const handleCancel = () => {
+    try {
+      // Save to KYC API
+      const success = await upsertKYC({
+        user_id: '', // Will be set by the hook
+        first_name: personalInfo.firstName || null,
+        last_name: personalInfo.lastName || null,
+        email: personalInfo.email || null,
+        phone: personalInfo.phone || null,
+        address: personalInfo.address || null,
+        date_of_birth: personalInfo.dateOfBirth || null,
+        occupation: personalInfo.occupation || null,
+        id_number: personalInfo.idNumber || null,
+      });
+
+      if (success) {
+        Alert.alert(
+          'Success',
+          'Personal information updated successfully!',
+          [{ text: 'OK', onPress: () => setIsEditing(false) }]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to save personal information. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving personal info:', error);
+      Alert.alert('Error', 'Failed to save personal information. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }, [personalInfo, upsertKYC]);
+
+  const handleCancel = useCallback(() => {
     setIsEditing(false);
     setErrors({});
     // Reset to original values if needed
-  };
+  }, []);
 
-  const InputField = ({ 
-    label, 
-    field, 
-    icon, 
-    placeholder,
-    keyboardType = 'default' as any,
-    multiline = false 
-  }: {
-    label: string;
-    field: keyof PersonalInfo;
-    icon: React.ReactNode;
-    placeholder?: string;
-    keyboardType?: any;
-    multiline?: boolean;
-  }) => (
-    <View style={styles.inputContainer}>
-      <View style={styles.inputLabel}>
-        {icon}
-        <Text style={styles.labelText}>{label}</Text>
-      </View>
-      <TextInput
-        style={[
-          styles.input,
-          multiline && styles.multilineInput,
-          errors[field] && styles.inputError,
-          !isEditing && styles.inputDisabled
-        ]}
-        value={personalInfo[field]}
-        onChangeText={(value) => handleFieldChange(field, value)}
-        placeholder={placeholder}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        editable={isEditing}
-        numberOfLines={multiline ? 3 : 1}
-      />
-      {errors[field] && (
-        <Text style={styles.errorText}>{errors[field]}</Text>
-      )}
-    </View>
-  );
+  // Create stable callback functions for each field
+  const handleFirstNameChange = useCallback((value: string) => {
+    handleFieldChange('firstName', value);
+  }, [handleFieldChange]);
+
+  const handleLastNameChange = useCallback((value: string) => {
+    handleFieldChange('lastName', value);
+  }, [handleFieldChange]);
+
+  const handleEmailChange = useCallback((value: string) => {
+    handleFieldChange('email', value);
+  }, [handleFieldChange]);
+
+  const handlePhoneChange = useCallback((value: string) => {
+    handleFieldChange('phone', value);
+  }, [handleFieldChange]);
+
+  const handleAddressChange = useCallback((value: string) => {
+    handleFieldChange('address', value);
+  }, [handleFieldChange]);
+
+  const handleDateOfBirthChange = useCallback((value: string) => {
+    handleFieldChange('dateOfBirth', value);
+  }, [handleFieldChange]);
+
+  const handleOccupationChange = useCallback((value: string) => {
+    handleFieldChange('occupation', value);
+  }, [handleFieldChange]);
+
+  const handleIdNumberChange = useCallback((value: string) => {
+    handleFieldChange('idNumber', value);
+  }, [handleFieldChange]);
+
 
   return (
     <Modal
@@ -161,6 +280,7 @@ export default function PersonalInfoModal({ visible, onClose }: PersonalInfoModa
         <KeyboardAvoidingView 
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           {/* Header */}
           <View style={styles.header}>
@@ -171,64 +291,137 @@ export default function PersonalInfoModal({ visible, onClose }: PersonalInfoModa
             <TouchableOpacity 
               onPress={isEditing ? handleSave : () => setIsEditing(true)}
               style={styles.actionButton}
+              disabled={saving}
             >
-              <Text style={styles.actionButtonText}>
-                {isEditing ? 'Save' : 'Edit'}
-              </Text>
+              {saving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.actionButtonText}>
+                  {isEditing ? 'Save' : 'Edit'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.content} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={false}
+          >
+            {loading && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0C7C59" />
+                <Text style={styles.loadingText}>Loading personal information...</Text>
+              </View>
+            )}
+
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {!loading && (
+              <>
             <InputField
+              key="firstName"
               label="First Name"
               field="firstName"
               icon={<User size={20} color="#0C7C59" />}
               placeholder="Enter first name"
+              value={personalInfo.firstName}
+              error={errors.firstName}
+              isEditing={isEditing}
+              onTextChange={handleFirstNameChange}
             />
 
             <InputField
+              key="lastName"
               label="Last Name"
               field="lastName"
               icon={<User size={20} color="#0C7C59" />}
               placeholder="Enter last name"
+              value={personalInfo.lastName}
+              error={errors.lastName}
+              isEditing={isEditing}
+              onTextChange={handleLastNameChange}
             />
 
             <InputField
+              key="email"
               label="Email Address"
               field="email"
               icon={<Mail size={20} color="#0C7C59" />}
               placeholder="Enter email address"
               keyboardType="email-address"
+              value={personalInfo.email}
+              error={errors.email}
+              isEditing={isEditing}
+              onTextChange={handleEmailChange}
             />
 
             <InputField
+              key="phone"
               label="Phone Number"
               field="phone"
               icon={<Phone size={20} color="#0C7C59" />}
               placeholder="Enter phone number"
               keyboardType="phone-pad"
+              value={personalInfo.phone}
+              error={errors.phone}
+              isEditing={isEditing}
+              onTextChange={handlePhoneChange}
             />
 
             <InputField
+              key="address"
               label="Address"
               field="address"
               icon={<MapPin size={20} color="#0C7C59" />}
               placeholder="Enter full address"
               multiline
+              value={personalInfo.address}
+              error={errors.address}
+              isEditing={isEditing}
+              onTextChange={handleAddressChange}
             />
 
             <InputField
+              key="dateOfBirth"
               label="Date of Birth"
               field="dateOfBirth"
               icon={<Calendar size={20} color="#0C7C59" />}
               placeholder="YYYY-MM-DD"
+              value={personalInfo.dateOfBirth}
+              error={errors.dateOfBirth}
+              isEditing={isEditing}
+              onTextChange={handleDateOfBirthChange}
             />
 
             <InputField
+              key="occupation"
               label="Occupation"
               field="occupation"
               icon={<Briefcase size={20} color="#0C7C59" />}
               placeholder="Enter occupation"
+              value={personalInfo.occupation}
+              error={errors.occupation}
+              isEditing={isEditing}
+              onTextChange={handleOccupationChange}
+            />
+
+            <InputField
+              key="idNumber"
+              label="ID Number"
+              field="idNumber"
+              icon={<Hash size={20} color="#0C7C59" />}
+              placeholder="Enter 13-digit ID number"
+              keyboardType="numeric"
+              value={personalInfo.idNumber}
+              error={errors.idNumber}
+              isEditing={isEditing}
+              onTextChange={handleIdNumberChange}
             />
 
             {isEditing && (
@@ -236,10 +429,16 @@ export default function PersonalInfoModal({ visible, onClose }: PersonalInfoModa
                 <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                <TouchableOpacity onPress={handleSave} style={styles.saveButton} disabled={saving}>
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  )}
                 </TouchableOpacity>
               </View>
+            )}
+              </>
             )}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -358,5 +557,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#7F8C8D',
+    marginTop: 12,
+  },
+  errorContainer: {
+    backgroundColor: '#FDF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
   },
 });

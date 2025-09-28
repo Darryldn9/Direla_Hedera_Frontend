@@ -223,6 +223,24 @@ export class BNPLContractInfrastructure {
     this.provider = new ethers.providers.JsonRpcProvider(config.hedera.evmRpcUrl);
     this.contractAddress = config.hedera.bnplContractAddress || '';
     
+    // Validate contract address
+    if (!this.contractAddress) {
+      logger.error('BNPL Contract address not configured', {
+        contractAddress: this.contractAddress,
+        envVar: 'BNPL_ADDRESS'
+      });
+      throw new Error('BNPL_ADDRESS environment variable is required but not set');
+    }
+
+    // Validate contract address format (should be a valid Ethereum address)
+    if (!/^0x[a-fA-F0-9]{40}$/.test(this.contractAddress)) {
+      logger.error('Invalid BNPL Contract address format', {
+        contractAddress: this.contractAddress,
+        expectedFormat: '0x followed by 40 hexadecimal characters'
+      });
+      throw new Error(`Invalid BNPL contract address format: ${this.contractAddress}. Expected format: 0x followed by 40 hexadecimal characters`);
+    }
+    
     // Initialize contract instance
     this.contract = new ethers.Contract(
       this.contractAddress,
@@ -257,7 +275,25 @@ export class BNPLContractInfrastructure {
       });
 
       // Create signer from private key
-      const signer = new ethers.Wallet(signerPrivateKey, this.provider);
+      // Convert DER-encoded private key to hex if needed
+      let hexPrivateKey = signerPrivateKey;
+      if (signerPrivateKey?.startsWith('30') && signerPrivateKey.length > 60) {
+        logger.warn('Private key appears to be DER-encoded, converting to hex', {
+          privateKeyPreview: signerPrivateKey.substring(0, 20) + '...',
+          privateKeyLength: signerPrivateKey.length
+        });
+        
+        // Convert DER-encoded private key to hex
+        // DER format: 30... (header) + actual key (last 64 characters)
+        hexPrivateKey = "0x" + signerPrivateKey.slice(-64);
+        
+        logger.info('Converted DER private key to hex', {
+          hexPrivateKeyPreview: hexPrivateKey.substring(0, 10) + '...',
+          hexPrivateKeyLength: hexPrivateKey.length
+        });
+      }
+      
+      const signer = new ethers.Wallet(hexPrivateKey, this.provider);
       const contractWithSigner = this.contract.connect(signer);
 
       // Call the smart contract method
@@ -334,7 +370,25 @@ export class BNPLContractInfrastructure {
       logger.info('Paying BNPL installment', { agreementId });
 
       // Create signer from private key
-      const signer = new ethers.Wallet(signerPrivateKey, this.provider);
+      // Convert DER-encoded private key to hex if needed
+      let hexPrivateKey = signerPrivateKey;
+      if (signerPrivateKey?.startsWith('30') && signerPrivateKey.length > 60) {
+        logger.warn('Private key appears to be DER-encoded, converting to hex', {
+          privateKeyPreview: signerPrivateKey.substring(0, 20) + '...',
+          privateKeyLength: signerPrivateKey.length
+        });
+        
+        // Convert DER-encoded private key to hex
+        // DER format: 30... (header) + actual key (last 64 characters)
+        hexPrivateKey = "0x" + signerPrivateKey.slice(-64);
+        
+        logger.info('Converted DER private key to hex', {
+          hexPrivateKeyPreview: hexPrivateKey.substring(0, 10) + '...',
+          hexPrivateKeyLength: hexPrivateKey.length
+        });
+      }
+      
+      const signer = new ethers.Wallet(hexPrivateKey, this.provider);
       const contractWithSigner = this.contract.connect(signer);
 
       // Get agreement details to calculate installment amount
@@ -430,9 +484,43 @@ export class BNPLContractInfrastructure {
    */
   static convertHederaAccountToEVMAddress(accountId: string): string {
     try {
+      logger.debug('Converting Hedera account to EVM address', {
+        accountId,
+        accountIdLength: accountId.length,
+        accountIdType: typeof accountId
+      });
+
+      // Check if the input looks like a DER-encoded public key (starts with 30)
+      if (accountId.startsWith('30') && accountId.length > 60) {
+        logger.error('Received DER-encoded public key instead of account ID', {
+          accountId: accountId.substring(0, 20) + '...',
+          accountIdLength: accountId.length
+        });
+        throw new Error(`Invalid account ID format: received what appears to be a DER-encoded public key instead of a Hedera account ID (format: 0.0.xxxxx)`);
+      }
+
+      // Check if the input looks like a valid Hedera account ID (format: 0.0.xxxxx)
+      if (!/^\d+\.\d+\.\d+$/.test(accountId)) {
+        logger.error('Invalid Hedera account ID format', {
+          accountId,
+          expectedFormat: '0.0.xxxxx'
+        });
+        throw new Error(`Invalid account ID format: expected format like '0.0.xxxxx', got '${accountId}'`);
+      }
+
       // Remove any dots and convert to number
       const accountNumber = accountId.replace(/\./g, '');
       const accountNum = parseInt(accountNumber, 10);
+      
+      // Validate that the account number is reasonable
+      if (isNaN(accountNum) || accountNum <= 0) {
+        logger.error('Invalid account number after parsing', {
+          accountId,
+          accountNumber,
+          accountNum
+        });
+        throw new Error(`Invalid account number: ${accountNumber}`);
+      }
       
       // Convert to EVM address format (20 bytes)
       const evmAddress = '0x' + accountNum.toString(16).padStart(40, '0');
@@ -448,7 +536,7 @@ export class BNPLContractInfrastructure {
         accountId,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
-      throw new Error(`Failed to convert account ID ${accountId} to EVM address`);
+      throw new Error(`Failed to convert account ID ${accountId} to EVM address: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

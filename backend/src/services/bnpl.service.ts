@@ -1,17 +1,135 @@
 import { v4 as uuidv4 } from 'uuid';
-import { BNPLTerms, CreateBNPLTermsRequest } from '../types';
+import { BNPLTerms, CreateBNPLTermsRequest, BNPLTermsCreatedEvent, BNPLTermsAcceptedEvent, BNPLTermsRejectedEvent, HCSMessageResult } from '../types';
 import { getSupabaseClient } from '../database/connection';
 import { NewBNPLTerms } from '../database/schema';
 import { logger } from '../utils/logger';
 import { CurrencyQuote, CurrencyConversionRequest } from '../types/index';
 import { ExternalApiInfrastructure } from '../infrastructure/external-api';
 import { BNPLContractInfrastructure } from '../infrastructure/bnpl-contract';
+import { HederaInfrastructure } from '../infrastructure/hedera';
 import { ethers } from 'ethers';
 
 export class BNPLService {
   private supabase = getSupabaseClient();
   private externalApi = new ExternalApiInfrastructure('https://api.example.com', 'your-api-key');
   private bnplContract = new BNPLContractInfrastructure();
+  private hederaInfra: HederaInfrastructure;
+  private readonly PLATFORM_ISSUER = 'did:hedera:testnet:platform-0.0.9999';
+
+  constructor() {
+    // Initialize Hedera infrastructure for HCS logging
+    this.hederaInfra = new HederaInfrastructure({
+      accountId: process.env.HEDERA_ACCOUNT_ID || '',
+      privateKey: process.env.HEDERA_PRIVATE_KEY || '',
+      network: (process.env.HEDERA_NETWORK as 'testnet' | 'mainnet') || 'testnet',
+      usdTokenId: process.env.USD_TOKEN_ID || '',
+      usdSupplyKey: process.env.USD_SUPPLY_KEY || '',
+      zarTokenId: process.env.ZAR_TOKEN_ID || '',
+      zarSupplyKey: process.env.ZAR_SUPPLY_KEY || '',
+      evmRpcUrl: process.env.HEDERA_EVM_RPC_URL || 'https://testnet.hashio.io/api',
+      bnplContractAddress: process.env.BNPL_ADDRESS || ''
+    });
+  }
+
+  /**
+   * Publish BNPL event to HCS topic
+   */
+  private async publishToHCS(event: BNPLTermsCreatedEvent | BNPLTermsAcceptedEvent | BNPLTermsRejectedEvent): Promise<HCSMessageResult> {
+    try {
+      const topicId = process.env.HCS_TOPIC_ID || '0.0.6880055';
+      const messageString = JSON.stringify(event);
+      
+      logger.debug('Publishing BNPL event to HCS', { 
+        topicId,
+        eventType: event.event,
+        messageSize: messageString.length
+      });
+
+      const result = await this.hederaInfra.submitTopicMessage(topicId, messageString);
+      
+      if (result.status === 'SUCCESS') {
+        const explorerLink = `https://hashscan.io/testnet/transaction/${result.transactionId}`;
+        
+        logger.info('BNPL event published to HCS successfully', { 
+          topicId,
+          transactionId: result.transactionId,
+          explorerLink: explorerLink,
+          eventType: event.event
+        });
+
+        return {
+          success: true,
+          transactionId: result.transactionId,
+          explorerLink: explorerLink
+        };
+      } else {
+        logger.error('BNPL event HCS publishing failed', { 
+          topicId,
+          status: result.status,
+          eventType: event.event,
+          error: result.message
+        });
+
+        return {
+          success: false,
+          error: result.message || `HCS message failed with status: ${result.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('BNPL event HCS publishing error', { 
+        eventType: event.event,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Debug method to check account ID formats in the database
+   */
+  async debugAccountIds(termsId?: string): Promise<void> {
+    try {
+      let query = this.supabase
+        .from('bnpl_terms')
+        .select('id, buyer_account_id, merchant_account_id, payment_id, status, created_at_timestamp');
+      
+      if (termsId) {
+        query = query.eq('id', termsId);
+      } else {
+        query = query.order('created_at_timestamp', { ascending: false }).limit(5);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        logger.error('Error fetching BNPL terms for debugging', { error });
+        return;
+      }
+
+      logger.info('BNPL Terms Account ID Debug', {
+        termsCount: data?.length || 0,
+        terms: data?.map(term => ({
+          id: term.id,
+          paymentId: term.payment_id,
+          buyerAccountId: term.buyer_account_id,
+          merchantAccountId: term.merchant_account_id,
+          buyerIdLength: term.buyer_account_id?.length,
+          merchantIdLength: term.merchant_account_id?.length,
+          buyerIdFormat: term.buyer_account_id?.startsWith('0.') ? 'Hedera Account ID' : 
+                         term.buyer_account_id?.startsWith('30') ? 'DER Public Key' : 'Unknown',
+          merchantIdFormat: term.merchant_account_id?.startsWith('0.') ? 'Hedera Account ID' : 
+                           term.merchant_account_id?.startsWith('30') ? 'DER Public Key' : 'Unknown',
+          status: term.status
+        }))
+      });
+    } catch (error) {
+      logger.error('Error in debugAccountIds', { error });
+    }
+  }
 
   async createTerms(request: CreateBNPLTermsRequest): Promise<BNPLTerms> {
     const termsId = uuidv4();
@@ -76,6 +194,47 @@ export class BNPLService {
       setTimeout(async () => {
         await this.expireTerms(termsId);
       }, (request.expiresInMinutes || 30) * 60 * 1000);
+
+      // Log BNPL terms creation to HCS
+      try {
+        const bnplEvent: BNPLTermsCreatedEvent = {
+          event: 'bnpl_terms_created',
+          terms_id: terms.id,
+          payment_id: terms.paymentId,
+          buyer_account_id: terms.buyerAccountId,
+          merchant_account_id: terms.merchantAccountId,
+          total_amount: terms.totalAmount,
+          currency: terms.currency,
+          installment_count: terms.installmentCount,
+          interest_rate: terms.interestRate,
+          status: terms.status,
+          expires_at: terms.expiresAt,
+          created_at: terms.createdAt,
+          timestamp: new Date().toISOString(),
+          platform_issuer: this.PLATFORM_ISSUER
+        };
+
+        const hcsResult = await this.publishToHCS(bnplEvent);
+        
+        if (hcsResult.success) {
+          logger.info('BNPL terms creation logged to HCS', {
+            termsId: terms.id,
+            hcsTransactionId: hcsResult.transactionId,
+            explorerLink: hcsResult.explorerLink
+          });
+        } else {
+          logger.warn('Failed to log BNPL terms creation to HCS', {
+            termsId: terms.id,
+            error: hcsResult.error
+          });
+        }
+      } catch (hcsError) {
+        logger.error('Error logging BNPL terms creation to HCS', {
+          termsId: terms.id,
+          error: hcsError instanceof Error ? hcsError.message : 'Unknown error'
+        });
+        // Don't fail the whole operation if HCS logging fails
+      }
 
       return terms;
     } catch (error) {
@@ -145,6 +304,20 @@ export class BNPLService {
         throw new Error(`Failed to fetch BNPL terms: ${fetchError.message}`);
       }
 
+      // Debug: Log the raw database values
+      logger.info('Raw BNPL terms data from database', {
+        termsId,
+        rawBuyerAccountId: currentTerms.buyer_account_id,
+        rawMerchantAccountId: currentTerms.merchant_account_id,
+        buyerAccountIdLength: currentTerms.buyer_account_id?.length,
+        merchantAccountIdLength: currentTerms.merchant_account_id?.length,
+        buyerAccountIdStartsWith30: currentTerms.buyer_account_id?.startsWith('30'),
+        merchantAccountIdStartsWith30: currentTerms.merchant_account_id?.startsWith('30')
+      });
+
+      // Additional debug: Check all recent BNPL terms
+      await this.debugAccountIds(termsId);
+
       if (currentTerms.status !== 'PENDING') {
         throw new Error('BNPL terms are no longer pending');
       }
@@ -180,6 +353,17 @@ export class BNPLService {
 
       // Execute smart contract to create BNPL agreement
       try {
+        // Debug: Log the account IDs before conversion
+        logger.info('Account IDs from database before conversion', {
+          termsId,
+          buyerAccountId: currentTerms.buyer_account_id,
+          merchantAccountId: currentTerms.merchant_account_id,
+          buyerAccountIdType: typeof currentTerms.buyer_account_id,
+          merchantAccountIdType: typeof currentTerms.merchant_account_id,
+          buyerAccountIdLength: currentTerms.buyer_account_id?.length,
+          merchantAccountIdLength: currentTerms.merchant_account_id?.length
+        });
+
         // Convert Hedera account IDs to EVM addresses
         const consumerEVMAddress = BNPLContractInfrastructure.convertHederaAccountToEVMAddress(currentTerms.buyer_account_id);
         const merchantEVMAddress = BNPLContractInfrastructure.convertHederaAccountToEVMAddress(currentTerms.merchant_account_id);
@@ -201,6 +385,31 @@ export class BNPLService {
           numInstallments: currentTerms.installment_count
         });
 
+        // Get the private key from the database for the merchant account
+        const { data: merchantAccount, error: accountError } = await this.supabase
+          .from('hedera_accounts')
+          .select('private_key')
+          .eq('account_id', currentTerms.merchant_account_id)
+          .single();
+
+        if (accountError || !merchantAccount) {
+          logger.error('Failed to fetch merchant account private key', {
+            termsId,
+            merchantAccountId: currentTerms.merchant_account_id,
+            error: accountError
+          });
+          throw new Error(`Failed to fetch merchant account private key: ${accountError?.message || 'Account not found'}`);
+        }
+
+        logger.info('Using private key from database for smart contract', {
+          termsId,
+          merchantAccountId: currentTerms.merchant_account_id,
+          hasPrivateKey: !!merchantAccount.private_key,
+          privateKeyLength: merchantAccount.private_key?.length,
+          privateKeyStartsWith0x: merchantAccount.private_key?.startsWith('0x'),
+          privateKeyPreview: merchantAccount.private_key?.substring(0, 10) + '...'
+        });
+
         // Create BNPL agreement on smart contract
         const contractResult = await this.bnplContract.createBNPLAgreement(
           consumerEVMAddress,
@@ -208,7 +417,7 @@ export class BNPLService {
           principalAmountWei.toString(),
           interestRateBasisPoints,
           currentTerms.installment_count,
-          process.env.HEDERA_PRIVATE_KEY || ''
+          merchantAccount.private_key
         );
 
         if (!contractResult.success) {
@@ -242,6 +451,43 @@ export class BNPLService {
             smart_contract_agreement_id: contractResult.agreementId || null
           })
           .eq('id', termsId);
+
+        // Log BNPL terms acceptance to HCS
+        try {
+          const bnplEvent: BNPLTermsAcceptedEvent = {
+            event: 'bnpl_terms_accepted',
+            terms_id: termsId,
+            payment_id: currentTerms.payment_id,
+            buyer_account_id: currentTerms.buyer_account_id,
+            merchant_account_id: currentTerms.merchant_account_id,
+            ...(contractResult.agreementId && { smart_contract_agreement_id: contractResult.agreementId }),
+            ...(contractResult.transactionId && { transaction_id: contractResult.transactionId }),
+            accepted_at: now,
+            timestamp: new Date().toISOString(),
+            platform_issuer: this.PLATFORM_ISSUER
+          };
+
+          const hcsResult = await this.publishToHCS(bnplEvent);
+          
+          if (hcsResult.success) {
+            logger.info('BNPL terms acceptance logged to HCS', {
+              termsId,
+              hcsTransactionId: hcsResult.transactionId,
+              explorerLink: hcsResult.explorerLink
+            });
+          } else {
+            logger.warn('Failed to log BNPL terms acceptance to HCS', {
+              termsId,
+              error: hcsResult.error
+            });
+          }
+        } catch (hcsError) {
+          logger.error('Error logging BNPL terms acceptance to HCS', {
+            termsId,
+            error: hcsError instanceof Error ? hcsError.message : 'Unknown error'
+          });
+          // Don't fail the whole operation if HCS logging fails
+        }
 
         return {
           success: true,
@@ -310,6 +556,42 @@ export class BNPLService {
       if (updateError) {
         logger.error('Error updating BNPL terms to rejected', { error: updateError, termsId });
         throw new Error(`Failed to reject BNPL terms: ${updateError.message}`);
+      }
+
+      // Log BNPL terms rejection to HCS
+      try {
+        const bnplEvent: BNPLTermsRejectedEvent = {
+          event: 'bnpl_terms_rejected',
+          terms_id: termsId,
+          payment_id: currentTerms.payment_id,
+          buyer_account_id: currentTerms.buyer_account_id,
+          merchant_account_id: currentTerms.merchant_account_id,
+          ...(reason && { rejection_reason: reason }),
+          rejected_at: now,
+          timestamp: new Date().toISOString(),
+          platform_issuer: this.PLATFORM_ISSUER
+        };
+
+        const hcsResult = await this.publishToHCS(bnplEvent);
+        
+        if (hcsResult.success) {
+          logger.info('BNPL terms rejection logged to HCS', {
+            termsId,
+            hcsTransactionId: hcsResult.transactionId,
+            explorerLink: hcsResult.explorerLink
+          });
+        } else {
+          logger.warn('Failed to log BNPL terms rejection to HCS', {
+            termsId,
+            error: hcsResult.error
+          });
+        }
+      } catch (hcsError) {
+        logger.error('Error logging BNPL terms rejection to HCS', {
+          termsId,
+          error: hcsError instanceof Error ? hcsError.message : 'Unknown error'
+        });
+        // Don't fail the whole operation if HCS logging fails
       }
 
       return { success: true };

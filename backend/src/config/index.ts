@@ -17,7 +17,7 @@ export const config = {
     zarTokenId: process.env.ZAR_TOKEN_ID || '',
     zarSupplyKey: process.env.ZAR_SUPPLY_KEY || '',
     evmRpcUrl: process.env.HEDERA_EVM_RPC_URL || 'https://testnet.hashio.io/api',
-    bnplContractAddress: process.env.BNPL_CONTRACT_ADDRESS || ''
+    bnplContractAddress: process.env.BNPL_ADDRESS || ''
   } as HederaConfig,
   
   mirrorNode: {

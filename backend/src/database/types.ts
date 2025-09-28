@@ -173,6 +173,7 @@ export type Database = {
           balance: number
           created_at: string
           currency: string
+          hex_private_key: string | null
           id: number
           is_active: boolean
           private_key: string
@@ -187,6 +188,7 @@ export type Database = {
           balance?: number
           created_at?: string
           currency?: string
+          hex_private_key?: string | null
           id?: number
           is_active?: boolean
           private_key: string
@@ -201,6 +203,7 @@ export type Database = {
           balance?: number
           created_at?: string
           currency?: string
+          hex_private_key?: string | null
           id?: number
           is_active?: boolean
           private_key?: string
@@ -215,8 +218,11 @@ export type Database = {
         Row: {
           address: string | null
           date_of_birth: string | null
+          email: string | null
+          first_name: string | null
           id: number
           id_number: string | null
+          last_name: string | null
           occupation: string | null
           phone: string | null
           user_id: string
@@ -224,8 +230,11 @@ export type Database = {
         Insert: {
           address?: string | null
           date_of_birth?: string | null
+          email?: string | null
+          first_name?: string | null
           id?: number
           id_number?: string | null
+          last_name?: string | null
           occupation?: string | null
           phone?: string | null
           user_id?: string
@@ -233,8 +242,11 @@ export type Database = {
         Update: {
           address?: string | null
           date_of_birth?: string | null
+          email?: string | null
+          first_name?: string | null
           id?: number
           id_number?: string | null
+          last_name?: string | null
           occupation?: string | null
           phone?: string | null
           user_id?: string

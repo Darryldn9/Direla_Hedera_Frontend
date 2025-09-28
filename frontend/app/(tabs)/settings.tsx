@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { User, Shield, Bell, Globe, CircleHelp as HelpCircle, LogOut, CreditCard, Smartphone, Lock, Eye, FileText, Phone, Mail, ChevronRight, Users2, Building2 } from 'lucide-react-native';
 import { useAppMode } from '../../contexts/AppContext';
 import { useUserManagement } from '../../hooks/useAuth';
+import { useKYC } from '../../hooks/useKYC';
 import { router } from 'expo-router';
 import PersonalInfoModal from '../../components/PersonalInfoModal';
 import PaymentMethodsModal from '../../components/PaymentMethodsModal';
@@ -38,6 +39,7 @@ export default function SettingsScreen() {
   const { mode, setMode } = useAppMode();
   const { logout } = useUserManagement();
   const { selectedAccount, accounts, isLoading: accountsLoading } = useAccount();
+  const { kycData } = useKYC();
   const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
@@ -154,7 +156,11 @@ export default function SettingsScreen() {
           <SettingItem
             icon={<User size={18} color="#0C7C59" />}
             title="Personal Information"
-            subtitle="Nomsa Khumalo • +27 12 345 6789"
+            subtitle={
+              kycData 
+                ? `${kycData.first_name || ''} ${kycData.last_name || ''}`.trim() || kycData.occupation || 'User'
+                : 'Tap to add your information'
+            }
             onPress={() => setShowPersonalInfo(true)}
           />
           
