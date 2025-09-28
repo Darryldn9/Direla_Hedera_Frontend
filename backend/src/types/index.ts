@@ -67,6 +67,8 @@ export interface HederaConfig {
   usdSupplyKey?: string;
   zarTokenId?: string;
   zarSupplyKey?: string;
+  evmRpcUrl?: string;
+  bnplContractAddress?: string;
 }
 
 export interface HederaTransactionResult {
@@ -243,4 +245,82 @@ export interface HCSMessageResult {
   transactionId?: string;
   explorerLink?: string;
   error?: string;
+}
+
+// BNPL Types
+export interface BNPLTerms {
+  id: string;
+  paymentId: string;
+  buyerAccountId: string;
+  merchantAccountId: string;
+  totalAmount: number;
+  currency: string;
+  installmentCount: number;
+  installmentAmount: number;
+  interestRate: number; // Percentage (e.g., 5 for 5%)
+  totalInterest: number;
+  totalAmountWithInterest: number;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | 'COMPLETED';
+  expiresAt: number; // Unix timestamp
+  createdAt: number; // Unix timestamp
+  acceptedAt?: number; // Unix timestamp
+  rejectedAt?: number; // Unix timestamp
+  smartContractAgreementId?: string; // Smart contract agreement ID
+}
+
+export interface CreateBNPLTermsRequest {
+  paymentId: string;
+  buyerAccountId: string;
+  merchantAccountId: string;
+  totalAmount: number;
+  currency: string;
+  installmentCount: number;
+  interestRate: number;
+  expiresInMinutes?: number; // Default 30 minutes
+}
+
+export interface CreateBNPLTermsResponse {
+  terms: BNPLTerms;
+  success: boolean;
+  message?: string;
+}
+
+export interface GetBNPLTermsRequest {
+  paymentId: string;
+  accountId: string;
+}
+
+export interface GetBNPLTermsResponse {
+  terms: BNPLTerms | null;
+  success: boolean;
+  message?: string;
+}
+
+export interface AcceptBNPLTermsRequest {
+  termsId: string;
+  accountId: string;
+}
+
+export interface AcceptBNPLTermsResponse {
+  success: boolean;
+  message?: string;
+  transactionId?: string;
+}
+
+export interface RejectBNPLTermsRequest {
+  termsId: string;
+  accountId: string;
+  reason?: string;
+}
+
+export interface RejectBNPLTermsResponse {
+  success: boolean;
+  message?: string;
+}
+
+// WebSocket Types
+export interface BNPLWebSocketMessage {
+  type: 'TERMS_OFFERED' | 'TERMS_ACCEPTED' | 'TERMS_REJECTED' | 'TERMS_EXPIRED';
+  data: BNPLTerms;
+  timestamp: number;
 }

@@ -367,7 +367,7 @@ function WalletScreen() {
               };
 
               return (
-                <TouchableOpacity key={transaction.transactionId} style={styles.transactionItem}>
+                <TouchableOpacity key={`tx-${transaction.transactionId}`} style={styles.transactionItem}>
                   <View style={styles.transactionIcon}>
                     {getTransactionIcon(getTransactionIconType())}
                   </View>

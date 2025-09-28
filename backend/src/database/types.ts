@@ -14,12 +14,165 @@ export type Database = {
   }
   public: {
     Tables: {
+      bnpl_terms: {
+        Row: {
+          accepted_at: number | null
+          buyer_account_id: string
+          created_at: number
+          created_at_timestamp: string | null
+          currency: string
+          expires_at: number
+          id: string
+          installment_amount: number
+          installment_count: number
+          interest_rate: number
+          merchant_account_id: string
+          payment_id: string
+          rejected_at: number | null
+          rejection_reason: string | null
+          smart_contract_agreement_id: string | null
+          status: string
+          total_amount: number
+          total_amount_with_interest: number
+          total_interest: number
+          updated_at_timestamp: string | null
+        }
+        Insert: {
+          accepted_at?: number | null
+          buyer_account_id: string
+          created_at: number
+          created_at_timestamp?: string | null
+          currency?: string
+          expires_at: number
+          id?: string
+          installment_amount: number
+          installment_count?: number
+          interest_rate?: number
+          merchant_account_id: string
+          payment_id: string
+          rejected_at?: number | null
+          rejection_reason?: string | null
+          smart_contract_agreement_id?: string | null
+          status?: string
+          total_amount: number
+          total_amount_with_interest: number
+          total_interest: number
+          updated_at_timestamp?: string | null
+        }
+        Update: {
+          accepted_at?: number | null
+          buyer_account_id?: string
+          created_at?: number
+          created_at_timestamp?: string | null
+          currency?: string
+          expires_at?: number
+          id?: string
+          installment_amount?: number
+          installment_count?: number
+          interest_rate?: number
+          merchant_account_id?: string
+          payment_id?: string
+          rejected_at?: number | null
+          rejection_reason?: string | null
+          smart_contract_agreement_id?: string | null
+          status?: string
+          total_amount?: number
+          total_amount_with_interest?: number
+          total_interest?: number
+          updated_at_timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_bnpl_terms_buyer_account"
+            columns: ["buyer_account_id"]
+            isOneToOne: false
+            referencedRelation: "hedera_accounts"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "fk_bnpl_terms_merchant_account"
+            columns: ["merchant_account_id"]
+            isOneToOne: false
+            referencedRelation: "hedera_accounts"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
+      cached_transactions: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string | null
+          currency: string
+          from_account: string
+          from_alias: string | null
+          gas_fee: number
+          id: number
+          period_end: number
+          period_start: number
+          period_type: string
+          to_account: string
+          to_alias: string | null
+          transaction_id: string
+          transaction_time: number
+          transaction_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string | null
+          currency?: string
+          from_account: string
+          from_alias?: string | null
+          gas_fee?: number
+          id?: number
+          period_end: number
+          period_start: number
+          period_type: string
+          to_account: string
+          to_alias?: string | null
+          transaction_id: string
+          transaction_time: number
+          transaction_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string | null
+          currency?: string
+          from_account?: string
+          from_alias?: string | null
+          gas_fee?: number
+          id?: number
+          period_end?: number
+          period_start?: number
+          period_type?: string
+          to_account?: string
+          to_alias?: string | null
+          transaction_id?: string
+          transaction_time?: number
+          transaction_type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_cached_transactions_account"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "hedera_accounts"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
       hedera_accounts: {
         Row: {
           account_id: string
           alias: string | null
           balance: number
           created_at: string
+          currency: string
           id: number
           is_active: boolean
           private_key: string
@@ -27,13 +180,13 @@ export type Database = {
           updated_at: string
           user_id: string
           whatsapp_phone: string | null
-          preferred_currency: string
         }
         Insert: {
           account_id: string
           alias?: string | null
           balance?: number
           created_at?: string
+          currency?: string
           id?: number
           is_active?: boolean
           private_key: string
@@ -41,13 +194,13 @@ export type Database = {
           updated_at?: string
           user_id: string
           whatsapp_phone?: string | null
-          preferred_currency?: string
         }
         Update: {
           account_id?: string
           alias?: string | null
           balance?: number
           created_at?: string
+          currency?: string
           id?: number
           is_active?: boolean
           private_key?: string
@@ -55,136 +208,125 @@ export type Database = {
           updated_at?: string
           user_id?: string
           whatsapp_phone?: string | null
-          preferred_currency?: string
         }
         Relationships: []
       }
-      users: {
+      payment_quotes: {
         Row: {
-          balance: number
-          created_at: string
-          id: number
-          updated_at: string
-          user_id: string | null
-          did?: string | null
+          created_at: string | null
+          exchange_rate: number
+          expires_at: string
+          from_amount: number
+          from_currency: string
+          id: string
+          receiver_account_id: string
+          status: string | null
+          to_amount: number
+          to_currency: string
+          used_at: string | null
         }
         Insert: {
-          balance?: number
-          created_at?: string
-          id?: number
-          updated_at?: string
-          user_id?: string | null
-          did?: string | null
+          created_at?: string | null
+          exchange_rate: number
+          expires_at: string
+          from_amount: number
+          from_currency: string
+          id: string
+          receiver_account_id: string
+          status?: string | null
+          to_amount: number
+          to_currency: string
+          used_at?: string | null
         }
         Update: {
-          balance?: number
-          created_at?: string
-          id?: number
-          updated_at?: string
-          user_id?: string | null
-          did?: string | null
-        }
-        Relationships: []
-      }
-      cached_transactions: {
-        Row: {
-          id: number
-          account_id: string
-          transaction_id: string
-          amount: number
-          currency: string
-          gas_fee: number
-          transaction_time: number
-          to_account: string
-          from_account: string
-          from_alias: string | null
-          to_alias: string | null
-          transaction_type: 'SEND' | 'RECEIVE'
-          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
-          period_start: number
-          period_end: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: number
-          account_id: string
-          transaction_id: string
-          amount: number
-          currency?: string
-          gas_fee?: number
-          transaction_time: number
-          to_account: string
-          from_account: string
-          from_alias?: string | null
-          to_alias?: string | null
-          transaction_type: 'SEND' | 'RECEIVE'
-          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
-          period_start: number
-          period_end: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: number
-          account_id?: string
-          transaction_id?: string
-          amount?: number
-          currency?: string
-          gas_fee?: number
-          transaction_time?: number
-          to_account?: string
-          from_account?: string
-          from_alias?: string | null
-          to_alias?: string | null
-          transaction_type?: 'SEND' | 'RECEIVE'
-          period_type?: 'daily' | 'weekly' | 'monthly' | 'all'
-          period_start?: number
-          period_end?: number
-          created_at?: string
-          updated_at?: string
+          created_at?: string | null
+          exchange_rate?: number
+          expires_at?: string
+          from_amount?: number
+          from_currency?: string
+          id?: string
+          receiver_account_id?: string
+          status?: string | null
+          to_amount?: number
+          to_currency?: string
+          used_at?: string | null
         }
         Relationships: []
       }
       transaction_cache_metadata: {
         Row: {
-          id: number
           account_id: string
-          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
-          period_start: number
-          period_end: number
-          last_updated: string
-          transaction_count: number
-          total_amount: number
+          created_at: string | null
+          id: number
           is_active: boolean
-          created_at: string
-          updated_at: string
+          last_updated: string | null
+          period_end: number
+          period_start: number
+          period_type: string
+          total_amount: number
+          transaction_count: number
+          updated_at: string | null
         }
         Insert: {
-          id?: number
           account_id: string
-          period_type: 'daily' | 'weekly' | 'monthly' | 'all'
-          period_start: number
-          period_end: number
-          last_updated: string
-          transaction_count?: number
-          total_amount?: number
+          created_at?: string | null
+          id?: number
           is_active?: boolean
-          created_at?: string
-          updated_at?: string
+          last_updated?: string | null
+          period_end: number
+          period_start: number
+          period_type: string
+          total_amount?: number
+          transaction_count?: number
+          updated_at?: string | null
         }
         Update: {
-          id?: number
           account_id?: string
-          period_type?: 'daily' | 'weekly' | 'monthly' | 'all'
-          period_start?: number
-          period_end?: number
-          last_updated?: string
-          transaction_count?: number
-          total_amount?: number
+          created_at?: string | null
+          id?: number
           is_active?: boolean
+          last_updated?: string | null
+          period_end?: number
+          period_start?: number
+          period_type?: string
+          total_amount?: number
+          transaction_count?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_transaction_cache_metadata_account"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "hedera_accounts"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          balance: number
+          created_at: string
+          did: string | null
+          id: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          balance?: number
           created_at?: string
+          did?: string | null
+          id?: number
           updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          did?: string | null
+          id?: number
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -193,7 +335,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      mark_expired_quotes: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

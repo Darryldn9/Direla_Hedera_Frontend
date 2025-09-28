@@ -9,6 +9,7 @@ import { UserService, HederaService, HederaAccountService } from '../types/index
 import { AuthService } from '../services/auth.service.js';
 import { MetricsRoutes } from './metrics.routes.js';
 import whatsappRoutes from './whatsapp.routes.js'; // Import the WhatsApp routes
+import bnplRoutes from './bnpl.routes.js'; // Import the BNPL routes
 
 export class Routes {
   private router: Router;
@@ -75,6 +76,7 @@ export class Routes {
     this.router.use('/metrics', this.metricsRoutes.getRouter());
     this.router.use('/diagnostics', diagnosticsRoutes);
     this.router.use('/whatsapp', whatsappRoutes); // Use the WhatsApp routes
+    this.router.use('/bnpl', bnplRoutes); // Use the BNPL routes
 
     // 404 handler
     this.router.use('*', (req, res) => {

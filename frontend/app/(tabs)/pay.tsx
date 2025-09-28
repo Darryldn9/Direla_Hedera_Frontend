@@ -10,6 +10,7 @@ import {
   Modal,
   Linking, // Added
   Platform, // Added
+  RefreshControl, // Added
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -21,7 +22,11 @@ import { usePaymentManager } from '../../hooks/usePayments';
 import { usePaymentPollingWithToast } from '../../hooks/usePaymentPollingWithToast';
 import { useToast } from '../../hooks/useToast';
 import { useQuote } from '../../hooks/useQuote';
-import { CurrencyQuote, ProcessPaymentWithDIDRequest } from '../../types/api';
+import { useBNPL } from '../../hooks/useBNPL';
+import { CurrencyQuote, ProcessPaymentWithDIDRequest, BNPLTerms } from '../../types/api';
+import { formatCurrency as formatCurrencyUtil } from '../../utils/currency';
+import PaymentConfirmationModal from '../../components/PaymentConfirmationModal';
+import BuyNowPayLaterModal from '../../components/BuyNowPayLaterModal';
 import {
   QrCode,
   MessageCircle,
@@ -35,6 +40,11 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   DollarSign,
+  CreditCard,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react-native';
 
 interface QuickContact {
@@ -67,7 +77,7 @@ interface QRPaymentData {
 
 export default function PayScreen() {
   // Tab state
-  const [activeTab, setActiveTab] = useState<'send' | 'receive'>('send');
+  const [activeTab, setActiveTab] = useState<'send' | 'receive' | 'bnpl'>('send');
   
   // Send payment states
   const [paymentMethod, setPaymentMethod] = useState<'qr' | 'whatsapp' | 'tap' | 'contacts' | null>(null);
@@ -88,6 +98,13 @@ export default function PayScreen() {
   const [showContactModal, setShowContactModal] = useState(false);
   const [selectedContact, setSelectedContact] = useState<QuickContact | null>(null);
   
+  // Payment confirmation modal states
+  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  const [showBuyNowPayLater, setShowBuyNowPayLater] = useState(false);
+  const [pendingPaymentData, setPendingPaymentData] = useState<QRPaymentData | null>(null);
+  const [pendingQuote, setPendingQuote] = useState<CurrencyQuote | null>(null);
+  const [pendingFromCurrency, setPendingFromCurrency] = useState<string>('HBAR');
+  
   const [permission, requestPermission] = useCameraPermissions();
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
@@ -98,6 +115,19 @@ export default function PayScreen() {
   const { makePayment } = usePaymentManager();
   const { showSuccess, showError, showInfo } = useToast();
   const { generateQuote, quote, isLoading: isQuoteLoading, error: quoteError } = useQuote();
+  const { getTermsForBuyer, isLoading: isBNPLLoading, error: bnplError } = useBNPL();
+  
+  // BNPL offers state
+  const [bnplOffers, setBnplOffers] = useState<BNPLTerms[]>([]);
+  const [convertedOffers, setConvertedOffers] = useState<Map<string, {
+    totalAmount: number;
+    totalInterest: number;
+    totalAmountWithInterest: number;
+    installmentAmount: number;
+    currency: string;
+    exchangeRate: number;
+  }>>(new Map());
+  const [refreshing, setRefreshing] = useState(false);
 
   // Initialize the polling hook for receive payments
   const poller = usePaymentPollingWithToast(
@@ -113,6 +143,75 @@ export default function PayScreen() {
         }
       : undefined
   );
+
+  // Convert BNPL offer to user's currency
+  const convertBNPLOffer = async (offer: BNPLTerms) => {
+    if (!selectedAccount || offer.currency === selectedAccount.currency) {
+      return null;
+    }
+
+    try {
+      const quote = await generateQuote({
+        fromAccountId: offer.merchantAccountId,
+        toAccountId: selectedAccount.account_id,
+        amount: offer.totalAmount,
+        fromCurrency: offer.currency,
+        toCurrency: selectedAccount.currency
+      });
+
+      if (quote) {
+        const exchangeRate = quote.exchangeRate;
+        return {
+          totalAmount: offer.totalAmount * exchangeRate,
+          totalInterest: offer.totalInterest * exchangeRate,
+          totalAmountWithInterest: offer.totalAmountWithInterest * exchangeRate,
+          installmentAmount: offer.installmentAmount * exchangeRate,
+          currency: selectedAccount.currency,
+          exchangeRate
+        };
+      }
+    } catch (error) {
+      console.error('Error converting BNPL offer:', error);
+    }
+    return null;
+  };
+
+  // Load BNPL offers
+  const loadBNPLOffers = async () => {
+    if (!selectedAccount) return;
+    
+    try {
+      const offers = await getTermsForBuyer(selectedAccount.account_id);
+      setBnplOffers(offers);
+      
+      // Convert offers to user's currency
+      const convertedMap = new Map();
+      for (const offer of offers) {
+        if (offer.currency !== selectedAccount.currency) {
+          const converted = await convertBNPLOffer(offer);
+          if (converted) {
+            convertedMap.set(offer.id, converted);
+          }
+        }
+      }
+      setConvertedOffers(convertedMap);
+    } catch (error) {
+      console.error('Error loading BNPL offers:', error);
+    }
+  };
+
+  // Load BNPL offers when account changes or tab is switched to BNPL
+  useEffect(() => {
+    if (activeTab === 'bnpl' && selectedAccount) {
+      loadBNPLOffers();
+    }
+  }, [activeTab, selectedAccount]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadBNPLOffers();
+    setRefreshing(false);
+  };
 
   // Mode-aware data
   const businessName = "Mama Thandi's Spaza Shop";
@@ -185,6 +284,94 @@ export default function PayScreen() {
     );
     setAmount('');
   };
+
+  const handlePayNow = () => {
+    if (pendingPaymentData) {
+      setShowPaymentConfirmation(false);
+      processQRPayment(pendingPaymentData);
+    }
+  };
+
+  const handleBuyNowPayLater = () => {
+    console.log('[Pay] Opening BNPL modal with payment data:', pendingPaymentData);
+    console.log('[Pay] Selected account:', selectedAccount);
+    setShowPaymentConfirmation(false);
+    setShowBuyNowPayLater(true);
+  };
+
+  const handleClosePaymentConfirmation = () => {
+    setShowPaymentConfirmation(false);
+    setPendingPaymentData(null);
+    setPendingQuote(null);
+    setPaymentMethod(null);
+    setRecipient('');
+  };
+
+  const handleCloseBuyNowPayLater = () => {
+    setShowBuyNowPayLater(false);
+  };
+
+  // BNPL helper functions
+  const formatCurrency = (amount: number, currency: string) => {
+    return formatCurrencyUtil(amount, currency);
+  };
+
+  const formatTimeRemaining = (expiresAt: number) => {
+    const now = Date.now();
+    const remaining = expiresAt - now;
+    
+    if (remaining <= 0) return 'Expired';
+    
+    const minutes = Math.floor(remaining / (1000 * 60));
+    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const getStatusIcon = (status: BNPLTerms['status']) => {
+    switch (status) {
+      case 'PENDING':
+        return <Clock size={20} color="#F39C12" />;
+      case 'ACCEPTED':
+        return <CheckCircle2 size={20} color="#27AE60" />;
+      case 'REJECTED':
+      case 'EXPIRED':
+        return <XCircle size={20} color="#E74C3C" />;
+      default:
+        return <Clock size={20} color="#8E8E93" />;
+    }
+  };
+
+  const getStatusColor = (status: BNPLTerms['status']) => {
+    switch (status) {
+      case 'PENDING':
+        return '#F39C12';
+      case 'ACCEPTED':
+        return '#27AE60';
+      case 'REJECTED':
+      case 'EXPIRED':
+        return '#E74C3C';
+      default:
+        return '#8E8E93';
+    }
+  };
+
+  // Debug BNPL modal data
+  useEffect(() => {
+    if (showBuyNowPayLater) {
+      console.log('[Pay] BNPL modal opened with data:', {
+        pendingPaymentData,
+        selectedAccount: selectedAccount?.account_id,
+        paymentData: pendingPaymentData ? {
+          paymentId: `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          buyerAccountId: selectedAccount?.account_id || '',
+          merchantAccountId: pendingPaymentData.toAccountId,
+          totalAmount: pendingPaymentData.amount,
+          currency: pendingPaymentData.currency,
+        } : undefined
+      });
+    }
+  }, [showBuyNowPayLater, pendingPaymentData, selectedAccount]);
 
   const generateWhatsAppPaymentLink = () => {
     if (!selectedAccount) {
@@ -542,49 +729,27 @@ export default function PayScreen() {
         const fromCurrency = paymentData.fromCurrency || selectedAccount?.currency || 'HBAR';
         const toCurrency = paymentData.toCurrency || paymentData.currency;
         
-        let confirmationMessage = `Pay ${paymentData.amount.toFixed(2)} ${paymentData.currency} to ${paymentData.accountAlias || paymentData.toAccountId}?`;
-        
         // If currencies are different, fetch and show quote
+        let quote: CurrencyQuote | null = null;
         if (fromCurrency !== toCurrency && selectedAccount) {
           try {
-            const quote = await generateQuote({
+            quote = await generateQuote({
               fromAccountId: selectedAccount.account_id,
               toAccountId: paymentData.toAccountId,
               amount: paymentData.amount,
               fromCurrency,
               toCurrency
             });
-            
-            if (quote) {
-              confirmationMessage = `Pay ${quote.fromAmount.toFixed(2)} ${quote.fromCurrency} to ${paymentData.accountAlias || paymentData.toAccountId}?`;
-            }
           } catch (error) {
             console.error('Failed to fetch quote:', error);
-            confirmationMessage += `\n\nNote: Unable to fetch exchange rate for ${fromCurrency} to ${toCurrency}. Payment will proceed with estimated conversion.`;
           }
         }
         
-        // Display payment confirmation with extracted data
-        Alert.alert(
-          'Payment Request Detected',
-          confirmationMessage,
-          [
-            { 
-              text: 'Cancel', 
-              style: 'cancel',
-              onPress: () => {
-                setPaymentMethod(null);
-                setRecipient('');
-              }
-            },
-            { 
-              text: 'Pay Now', 
-              onPress: () => {
-                processQRPayment(paymentData);
-              }
-            }
-          ]
-        );
+        // Store payment data and quote for the confirmation modal
+        setPendingPaymentData(paymentData);
+        setPendingQuote(quote);
+        setPendingFromCurrency(fromCurrency);
+        setShowPaymentConfirmation(true);
       } else {
         // Handle invalid QR code format
         Alert.alert(
@@ -785,6 +950,22 @@ export default function PayScreen() {
                 activeTab === 'receive' && styles.tabOptionTextActive
               ]}>
                 Request Payment
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.tabOption,
+                activeTab === 'bnpl' && styles.tabOptionActive
+              ]}
+              onPress={() => setActiveTab('bnpl')}
+            >
+              <CreditCard size={20} color={activeTab === 'bnpl' ? '#FFFFFF' : '#0C7C59'} />
+              <Text style={[
+                styles.tabOptionText,
+                activeTab === 'bnpl' && styles.tabOptionTextActive
+              ]}>
+                BNPL Offers
               </Text>
             </TouchableOpacity>
           </View>
@@ -988,6 +1169,173 @@ export default function PayScreen() {
           </>
         )}
 
+        {/* BNPL Offers Tab Content */}
+        {activeTab === 'bnpl' && (
+          <ScrollView 
+            style={styles.bnplContainer}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            }
+          >
+            <View style={styles.bnplHeader}>
+              <CreditCard size={24} color="#0C7C59" />
+              <Text style={styles.bnplTitle}>Your BNPL Offers</Text>
+            </View>
+            
+            <Text style={styles.bnplDescription}>
+              View and track your Buy Now Pay Later offers and their status.
+            </Text>
+
+            {bnplError && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{bnplError}</Text>
+              </View>
+            )}
+
+            {bnplOffers.length === 0 ? (
+              <View style={styles.emptyState}>
+                <CreditCard size={48} color="#8E8E93" />
+                <Text style={styles.emptyTitle}>No BNPL Offers</Text>
+                <Text style={styles.emptyDescription}>
+                  When you request BNPL terms for payments, they will appear here for tracking.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.offersList}>
+                {bnplOffers.map((offer) => (
+                  <View key={offer.id} style={styles.offerCard}>
+                    <View style={styles.offerHeader}>
+                      <View style={styles.statusContainer}>
+                        {getStatusIcon(offer.status)}
+                        <Text style={[styles.statusText, { color: getStatusColor(offer.status) }]}>
+                          {offer.status}
+                        </Text>
+                      </View>
+                      {offer.status === 'PENDING' && (
+                        <Text style={styles.timeRemaining}>
+                          {formatTimeRemaining(offer.expiresAt)}
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={styles.offerDetails}>
+                      <View style={styles.amountRow}>
+                        <Text style={styles.amountLabel}>Total Amount</Text>
+                        <View style={styles.amountContainer}>
+                          {convertedOffers.has(offer.id) ? (
+                            <>
+                              <Text style={styles.amountValue}>
+                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalAmount, convertedOffers.get(offer.id)!.currency)}
+                              </Text>
+                              <Text style={styles.originalAmount}>
+                                {formatCurrency(offer.totalAmount, offer.currency)}
+                              </Text>
+                            </>
+                          ) : (
+                            <Text style={styles.amountValue}>
+                              {formatCurrency(offer.totalAmount, offer.currency)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={styles.amountRow}>
+                        <Text style={styles.amountLabel}>Interest ({offer.interestRate}%)</Text>
+                        <View style={styles.amountContainer}>
+                          {convertedOffers.has(offer.id) ? (
+                            <>
+                              <Text style={styles.amountValue}>
+                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalInterest, convertedOffers.get(offer.id)!.currency)}
+                              </Text>
+                              <Text style={styles.originalAmount}>
+                                {formatCurrency(offer.totalInterest, offer.currency)}
+                              </Text>
+                            </>
+                          ) : (
+                            <Text style={styles.amountValue}>
+                              {formatCurrency(offer.totalInterest, offer.currency)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={styles.amountRow}>
+                        <Text style={styles.amountLabel}>Total with Interest</Text>
+                        <View style={styles.amountContainer}>
+                          {convertedOffers.has(offer.id) ? (
+                            <>
+                              <Text style={[styles.amountValue, styles.totalAmount]}>
+                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalAmountWithInterest, convertedOffers.get(offer.id)!.currency)}
+                              </Text>
+                              <Text style={[styles.originalAmount, styles.totalAmount]}>
+                                {formatCurrency(offer.totalAmountWithInterest, offer.currency)}
+                              </Text>
+                            </>
+                          ) : (
+                            <Text style={[styles.amountValue, styles.totalAmount]}>
+                              {formatCurrency(offer.totalAmountWithInterest, offer.currency)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={styles.installmentDetails}>
+                        <Text style={styles.installmentLabel}>
+                          {offer.installmentCount} Weekly Installments
+                        </Text>
+                        <View style={styles.amountContainer}>
+                          {convertedOffers.has(offer.id) ? (
+                            <>
+                              <Text style={styles.installmentAmount}>
+                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.installmentAmount, convertedOffers.get(offer.id)!.currency)} each
+                              </Text>
+                              <Text style={styles.originalAmount}>
+                                {formatCurrency(offer.installmentAmount, offer.currency)} each
+                              </Text>
+                            </>
+                          ) : (
+                            <Text style={styles.installmentAmount}>
+                              {formatCurrency(offer.installmentAmount, offer.currency)} each
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={styles.bnplMerchantInfo}>
+                        <Text style={styles.merchantLabel}>Merchant Account:</Text>
+                        <Text style={styles.merchantAccount}>{offer.merchantAccountId}</Text>
+                      </View>
+
+                      <View style={styles.paymentInfo}>
+                        <Text style={styles.paymentLabel}>Payment ID:</Text>
+                        <Text style={styles.paymentId}>{offer.paymentId}</Text>
+                      </View>
+                    </View>
+
+                    {offer.status === 'ACCEPTED' && (
+                      <View style={styles.acceptedContainer}>
+                        <CheckCircle2 size={24} color="#27AE60" />
+                        <Text style={styles.acceptedText}>
+                          Terms accepted! You will be charged in installments.
+                        </Text>
+                      </View>
+                    )}
+
+                    {(offer.status === 'REJECTED' || offer.status === 'EXPIRED') && (
+                      <View style={styles.rejectedContainer}>
+                        <XCircle size={24} color="#E74C3C" />
+                        <Text style={styles.rejectedText}>
+                          {offer.status === 'REJECTED' ? 'Terms were rejected by merchant.' : 'Terms have expired.'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        )}
+
         {/* Hedera Info */}
         <View style={styles.hederaInfo}>
           <Text style={styles.infoTitle}>⚡ Hedera Hashgraph</Text>
@@ -1034,6 +1382,39 @@ export default function PayScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Payment Confirmation Modal */}
+      <PaymentConfirmationModal
+        visible={showPaymentConfirmation}
+        onClose={handleClosePaymentConfirmation}
+        onPayNow={handlePayNow}
+        onBuyNowPayLater={handleBuyNowPayLater}
+        paymentData={pendingPaymentData ? {
+          amount: pendingPaymentData.amount,
+          currency: pendingPaymentData.currency,
+          accountAlias: pendingPaymentData.accountAlias,
+          toAccountId: pendingPaymentData.toAccountId,
+        } : {
+          amount: 0,
+          currency: 'HBAR',
+          toAccountId: '',
+        }}
+        quote={pendingQuote}
+        fromCurrency={pendingFromCurrency}
+      />
+
+      {/* Buy Now Pay Later Modal */}
+      <BuyNowPayLaterModal
+        visible={showBuyNowPayLater}
+        onClose={handleCloseBuyNowPayLater}
+        paymentData={pendingPaymentData ? {
+          paymentId: `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          buyerAccountId: selectedAccount?.account_id || '',
+          merchantAccountId: pendingPaymentData.toAccountId,
+          totalAmount: pendingPaymentData.amount,
+          currency: pendingPaymentData.currency,
+        } : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -1568,5 +1949,202 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     paddingHorizontal: 40,
+  },
+  // BNPL Styles
+  bnplContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  bnplHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 12,
+  },
+  bnplTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  bnplDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  errorContainer: {
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 20,
+  },
+  offersList: {
+    gap: 16,
+  },
+  offerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  offerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  timeRemaining: {
+    fontSize: 12,
+    color: '#F39C12',
+    fontWeight: '500',
+  },
+  offerDetails: {
+    backgroundColor: '#F8F9FA',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  amountLabel: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  amountValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  amountContainer: {
+    alignItems: 'flex-end',
+  },
+  originalAmount: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  totalAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0C7C59',
+  },
+  installmentDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+    alignItems: 'center',
+  },
+  installmentLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  installmentAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0C7C59',
+  },
+  bnplMerchantInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  merchantLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  merchantAccount: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  paymentInfo: {
+    marginTop: 8,
+  },
+  paymentLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  paymentId: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#1C1C1E',
+    fontFamily: 'monospace',
+  },
+  acceptedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  acceptedText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#166534',
+    fontWeight: '500',
+  },
+  rejectedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  rejectedText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#DC2626',
+    fontWeight: '500',
   },
 });

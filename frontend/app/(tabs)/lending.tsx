@@ -7,10 +7,16 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TrendingUp, Shield, Clock, Users, DollarSign, Award, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, ArrowRight } from 'lucide-react-native';
+import { TrendingUp, Shield, Clock, Users, DollarSign, Award, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, ArrowRight, CreditCard, CheckCircle2, XCircle } from 'lucide-react-native';
 import { useAppMode } from '../../contexts/AppContext';
+import { useAccount } from '../../contexts/AccountContext';
+import { useBNPL } from '../../hooks/useBNPL';
+import { BNPLTerms } from '../../types/api';
+import { formatCurrency as formatCurrencyUtil } from '../../utils/currency';
 
 interface LoanOffer {
   id: string;
@@ -33,9 +39,333 @@ interface LendingOpportunity {
   risk: 'Low' | 'Medium' | 'High';
 }
 
+// BNPL Terms Section Component
+function BNPLTermsSection() {
+  const { selectedAccount } = useAccount();
+  const { 
+    getPendingTermsForMerchant, 
+    acceptTerms, 
+    rejectTerms, 
+    isLoading, 
+    error 
+  } = useBNPL();
+  
+  const [pendingTerms, setPendingTerms] = useState<BNPLTerms[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Custom alert modal state
+  const [showCustomAlert, setShowCustomAlert] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string;
+    message: string;
+    buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }>;
+  }>({
+    title: '',
+    message: '',
+    buttons: []
+  });
+
+  // Custom alert function
+  const showCustomAlertModal = (title: string, message: string, buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }>) => {
+    setAlertConfig({ title, message, buttons });
+    setShowCustomAlert(true);
+  };
+
+  const loadPendingTerms = async () => {
+    if (!selectedAccount) return;
+    
+    const terms = await getPendingTermsForMerchant(selectedAccount.account_id);
+    setPendingTerms(terms);
+  };
+
+  useEffect(() => {
+    loadPendingTerms();
+  }, [selectedAccount]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadPendingTerms();
+    setRefreshing(false);
+  };
+
+  const handleAcceptTerms = async (termsId: string) => {
+    if (!selectedAccount) return;
+
+    console.log('[Lending] Accepting terms:', termsId, 'for account:', selectedAccount.account_id);
+
+    showCustomAlertModal(
+      'Accept BNPL Terms',
+      'Are you sure you want to accept these BNPL terms? The customer will be charged in installments.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => setShowCustomAlert(false) },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            setShowCustomAlert(false);
+            console.log('[Lending] Attempting to accept terms:', termsId, 'for account:', selectedAccount.account_id);
+            try {
+              const success = await acceptTerms(termsId, selectedAccount.account_id);
+              console.log('[Lending] Accept terms result:', success);
+              if (success) {
+                showCustomAlertModal('Success', 'BNPL terms accepted successfully!', [
+                  { text: 'OK', onPress: () => setShowCustomAlert(false) }
+                ]);
+                loadPendingTerms();
+              } else {
+                showCustomAlertModal('Error', 'Failed to accept BNPL terms. Please try again.', [
+                  { text: 'OK', onPress: () => setShowCustomAlert(false) }
+                ]);
+              }
+            } catch (error) {
+              console.error('[Lending] Error accepting terms:', error);
+              showCustomAlertModal('Error', `Failed to accept BNPL terms: ${error instanceof Error ? error.message : 'Unknown error'}`, [
+                { text: 'OK', onPress: () => setShowCustomAlert(false) }
+              ]);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleRejectTerms = async (termsId: string) => {
+    if (!selectedAccount) return;
+
+    Alert.alert(
+      'Reject BNPL Terms',
+      'Are you sure you want to reject these BNPL terms?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await rejectTerms(termsId, selectedAccount.account_id, 'Merchant rejected');
+            if (success) {
+              Alert.alert('Rejected', 'BNPL terms have been rejected.');
+              loadPendingTerms();
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const formatCurrency = (amount: number, currency: string) => {
+    return formatCurrencyUtil(amount, currency);
+  };
+
+  const formatTimeRemaining = (expiresAt: number) => {
+    const now = Date.now();
+    const remaining = expiresAt - now;
+    
+    if (remaining <= 0) return 'Expired';
+    
+    const minutes = Math.floor(remaining / (1000 * 60));
+    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const getStatusIcon = (status: BNPLTerms['status']) => {
+    switch (status) {
+      case 'PENDING':
+        return <Clock size={20} color="#F39C12" />;
+      case 'ACCEPTED':
+        return <CheckCircle2 size={20} color="#27AE60" />;
+      case 'REJECTED':
+      case 'EXPIRED':
+        return <XCircle size={20} color="#E74C3C" />;
+      default:
+        return <Clock size={20} color="#8E8E93" />;
+    }
+  };
+
+  const getStatusColor = (status: BNPLTerms['status']) => {
+    switch (status) {
+      case 'PENDING':
+        return '#F39C12';
+      case 'ACCEPTED':
+        return '#27AE60';
+      case 'REJECTED':
+      case 'EXPIRED':
+        return '#E74C3C';
+      default:
+        return '#8E8E93';
+    }
+  };
+
+  return (
+    <ScrollView 
+      style={styles.bnplContainer}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
+      <View style={styles.bnplHeader}>
+        <CreditCard size={24} color="#0C7C59" />
+        <Text style={styles.bnplTitle}>Buy Now Pay Later Terms</Text>
+      </View>
+      
+      <Text style={styles.bnplDescription}>
+        Manage BNPL terms from customers who want to split their payments into installments.
+      </Text>
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {pendingTerms.length === 0 ? (
+        <View style={styles.emptyState}>
+          <CreditCard size={48} color="#8E8E93" />
+          <Text style={styles.emptyTitle}>No Pending BNPL Terms</Text>
+          <Text style={styles.emptyDescription}>
+            When customers request BNPL terms, they will appear here for your review.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.termsList}>
+          {pendingTerms.map((terms) => (
+            <View key={terms.id} style={styles.termsCard}>
+              <View style={styles.termsHeader}>
+                <View style={styles.statusContainer}>
+                  {getStatusIcon(terms.status)}
+                  <Text style={[styles.statusText, { color: getStatusColor(terms.status) }]}>
+                    {terms.status}
+                  </Text>
+                </View>
+                {terms.status === 'PENDING' && (
+                  <Text style={styles.timeRemaining}>
+                    {formatTimeRemaining(terms.expiresAt)}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.termsDetails}>
+                <View style={styles.bnplAmountRow}>
+                  <Text style={styles.bnplAmountLabel}>Total Amount</Text>
+                  <Text style={styles.bnplAmountValue}>
+                    {formatCurrency(terms.totalAmount, terms.currency)}
+                  </Text>
+                </View>
+
+                <View style={styles.bnplAmountRow}>
+                  <Text style={styles.bnplAmountLabel}>Interest (5%)</Text>
+                  <Text style={styles.bnplAmountValue}>
+                    {formatCurrency(terms.totalInterest, terms.currency)}
+                  </Text>
+                </View>
+
+                <View style={styles.bnplAmountRow}>
+                  <Text style={styles.bnplAmountLabel}>Total with Interest</Text>
+                  <Text style={[styles.bnplAmountValue, styles.bnplTotalAmount]}>
+                    {formatCurrency(terms.totalAmountWithInterest, terms.currency)}
+                  </Text>
+                </View>
+
+                <View style={styles.installmentDetails}>
+                  <Text style={styles.installmentLabel}>
+                    {terms.installmentCount} Weekly Installments
+                  </Text>
+                  <Text style={styles.installmentAmount}>
+                    {formatCurrency(terms.installmentAmount, terms.currency)} each
+                  </Text>
+                </View>
+
+                <View style={styles.customerInfo}>
+                  <Text style={styles.customerLabel}>Customer Account:</Text>
+                  <Text style={styles.customerAccount}>{terms.buyerAccountId}</Text>
+                </View>
+              </View>
+
+              {terms.status === 'PENDING' && (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.acceptButton]}
+                    onPress={() => handleAcceptTerms(terms.id)}
+                    disabled={isLoading}
+                  >
+                    <CheckCircle2 size={20} color="#FFFFFF" />
+                    <Text style={styles.acceptButtonText}>Accept Terms</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.rejectButton]}
+                    onPress={() => handleRejectTerms(terms.id)}
+                    disabled={isLoading}
+                  >
+                    <XCircle size={20} color="#E74C3C" />
+                    <Text style={styles.rejectButtonText}>Reject Terms</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {terms.status === 'ACCEPTED' && (
+                <View style={styles.acceptedContainer}>
+                  <CheckCircle2 size={24} color="#27AE60" />
+                  <Text style={styles.acceptedText}>
+                    Terms accepted! Customer will be charged in installments.
+                  </Text>
+                </View>
+              )}
+
+              {(terms.status === 'REJECTED' || terms.status === 'EXPIRED') && (
+                <View style={styles.rejectedContainer}>
+                  <XCircle size={24} color="#E74C3C" />
+                  <Text style={styles.rejectedText}>
+                    {terms.status === 'REJECTED' ? 'Terms were rejected.' : 'Terms have expired.'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Custom Alert Modal */}
+      <Modal
+        visible={showCustomAlert}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCustomAlert(false)}
+      >
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertModal}>
+            <Text style={styles.alertTitle}>{alertConfig.title}</Text>
+            <Text style={styles.alertMessage}>{alertConfig.message}</Text>
+            <View style={styles.alertButtons}>
+              {alertConfig.buttons.map((button, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.alertButton,
+                    button.style === 'cancel' && styles.alertButtonCancel,
+                    button.style === 'destructive' && styles.alertButtonDestructive,
+                  ]}
+                  onPress={button.onPress}
+                >
+                  <Text style={[
+                    styles.alertButtonText,
+                    button.style === 'cancel' && styles.alertButtonTextCancel,
+                    button.style === 'destructive' && styles.alertButtonTextDestructive,
+                  ]}>
+                    {button.text}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
+  );
+}
+
 export default function LendingScreen() {
   const { mode } = useAppMode();
-  const [activeTab, setActiveTab] = useState<'borrow' | 'lend' | 'business'>('borrow');
+  const [activeTab, setActiveTab] = useState<'borrow' | 'lend' | 'business' | 'bnpl'>('borrow');
   const [loanAmount, setLoanAmount] = useState('');
   const [creditScore] = useState(742); // Based on transaction history
   const insets = useSafeAreaInsets();
@@ -43,7 +373,7 @@ export default function LendingScreen() {
   // Set default tab based on mode
   useEffect(() => {
     if (mode === 'business') {
-      setActiveTab('business');
+      setActiveTab('bnpl');
     } else {
       setActiveTab('borrow');
     }
@@ -230,6 +560,14 @@ export default function LendingScreen() {
           ) : (
             <>
               <TouchableOpacity
+                style={[styles.tab, activeTab === 'bnpl' && styles.activeTab]}
+                onPress={() => setActiveTab('bnpl')}
+              >
+                <Text style={[styles.tabText, activeTab === 'bnpl' && styles.activeTabText]}>
+                  BNPL Terms
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[styles.tab, activeTab === 'business' && styles.activeTab]}
                 onPress={() => setActiveTab('business')}
               >
@@ -339,6 +677,8 @@ export default function LendingScreen() {
               ))}
             </View>
           </>
+        ) : (activeTab === 'bnpl' && mode === 'business') ? (
+          <BNPLTermsSection />
         ) : (activeTab === 'business' && (mode === 'consumer' || mode === 'business')) ? (
           <>
             {/* Business Metrics */}
@@ -825,7 +1165,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
     textAlign: 'center',
-    numberOfLines: 1,
   },
   statLabel: {
     fontSize: 11,
@@ -833,7 +1172,6 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     marginTop: 4,
-    numberOfLines: 2,
   },
   opportunitiesContainer: {
     paddingHorizontal: 20,
@@ -1045,5 +1383,279 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#0C7C59',
     flex: 1,
+  },
+  // BNPL Styles
+  bnplContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  bnplHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 12,
+  },
+  bnplTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  bnplDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  errorContainer: {
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 20,
+  },
+  termsList: {
+    gap: 16,
+  },
+  termsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  termsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  timeRemaining: {
+    fontSize: 12,
+    color: '#F39C12',
+    fontWeight: '500',
+  },
+  termsDetails: {
+    backgroundColor: '#F8F9FA',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  bnplAmountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bnplAmountLabel: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  bnplAmountValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  bnplTotalAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0C7C59',
+  },
+  installmentDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+    alignItems: 'center',
+  },
+  installmentLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  installmentAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0C7C59',
+  },
+  customerInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  customerLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  customerAccount: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1C1C1E',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  acceptButton: {
+    backgroundColor: '#0C7C59',
+  },
+  acceptButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rejectButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#E74C3C',
+  },
+  rejectButtonText: {
+    color: '#E74C3C',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  acceptedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  acceptedText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#166534',
+    fontWeight: '500',
+  },
+  rejectedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  rejectedText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#DC2626',
+    fontWeight: '500',
+  },
+  // Custom Alert Modal Styles
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  alertModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 24,
+    minWidth: 280,
+    maxWidth: 320,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  alertTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  alertMessage: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 20,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  alertButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  alertButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+  },
+  alertButtonCancel: {
+    backgroundColor: '#F2F2F7',
+  },
+  alertButtonDestructive: {
+    backgroundColor: '#FF3B30',
+  },
+  alertButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  alertButtonTextCancel: {
+    color: '#007AFF',
+  },
+  alertButtonTextDestructive: {
+    color: '#FFFFFF',
   },
 });
