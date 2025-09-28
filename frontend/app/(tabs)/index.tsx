@@ -11,6 +11,10 @@ import { useTransactionHistory } from '@/hooks/useTransactionHistory';
 import { useHederaOperations } from '@/hooks/useHedera';
 import { useQuote } from '@/hooks/useQuote';
 import moment from 'moment';
+import DepositModal from '../../components/DepositModal';
+import SendModal from '../../components/SendModal';
+import RequestModal from '../../components/RequestModal';
+import WithdrawModal from '../../components/WithdrawModal';
 
 interface Transaction {
   id: string;
@@ -24,6 +28,10 @@ interface Transaction {
 function WalletScreen() {
   const [showBalance, setShowBalance] = useState(true);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
 
@@ -259,28 +267,28 @@ function WalletScreen() {
 
         <View style={styles.quickActions}>
           <View style={styles.actionsGrid}>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => setShowDepositModal(true)}>
               <View style={styles.actionIcon}>
                 <Plus size={20} color="#0C7C59" />
               </View>
               <Text style={styles.actionText}>Deposit</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => setShowSendModal(true)}>
               <View style={styles.actionIcon}>
                 <ArrowUpRight size={20} color="#E74C3C" />
               </View>
               <Text style={styles.actionText}>Send</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => setShowRequestModal(true)}>
               <View style={styles.actionIcon}>
                 <ArrowDownLeft size={20} color="#3498DB" />
               </View>
               <Text style={styles.actionText}>Request</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => setShowWithdrawModal(true)}>
               <View style={styles.actionIcon}>
                 <Minus size={20} color="#F39C12" />
               </View>
@@ -442,6 +450,46 @@ function WalletScreen() {
           cardNumber={cardNumber}
           holderName={holderName}
           balance={balance}
+        />
+        
+        <DepositModal
+          visible={showDepositModal}
+          onClose={() => setShowDepositModal(false)}
+          onDepositComplete={(amount, method) => {
+            console.log(`Deposit completed: R${amount} via ${method}`);
+            // In a real app, you would update the balance here
+            setShowDepositModal(false);
+          }}
+        />
+        
+        <SendModal
+          visible={showSendModal}
+          onClose={() => setShowSendModal(false)}
+          onSendComplete={(amount, recipient, method) => {
+            console.log(`Send completed: R${amount} to ${recipient} via ${method}`);
+            // In a real app, you would update the balance and transaction history here
+            setShowSendModal(false);
+          }}
+        />
+        
+        <RequestModal
+          visible={showRequestModal}
+          onClose={() => setShowRequestModal(false)}
+          onRequestComplete={(amount, note) => {
+            console.log(`Request created: R${amount} for ${note}`);
+            // In a real app, you would create a request and share it
+            setShowRequestModal(false);
+          }}
+        />
+        
+        <WithdrawModal
+          visible={showWithdrawModal}
+          onClose={() => setShowWithdrawModal(false)}
+          onWithdrawComplete={(amount, method, accountDetails) => {
+            console.log(`Withdrawal requested: R${amount} via ${method} to ${accountDetails}`);
+            // In a real app, you would initiate a withdrawal
+            setShowWithdrawModal(false);
+          }}
         />
       </ScrollView>
     </SafeAreaView>
