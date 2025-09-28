@@ -8,6 +8,7 @@ import diagnosticsRoutes from './diagnostics.routes.js';
 import { UserService, HederaService, HederaAccountService } from '../types/index.js';
 import { AuthService } from '../services/auth.service.js';
 import { MetricsRoutes } from './metrics.routes.js';
+import whatsappRoutes from './whatsapp.routes.js'; // Import the WhatsApp routes
 
 export class Routes {
   private router: Router;
@@ -27,6 +28,7 @@ export class Routes {
     this.cachedTransactionRoutes = new CachedTransactionRoutes(hederaService);
     this.metricsRoutes = new MetricsRoutes(hederaService, hederaAccountService);
     this.setupRoutes();
+    
   }
 
   private setupRoutes(): void {
@@ -72,6 +74,7 @@ export class Routes {
     this.router.use('/cached-transactions', this.cachedTransactionRoutes.getRouter());
     this.router.use('/metrics', this.metricsRoutes.getRouter());
     this.router.use('/diagnostics', diagnosticsRoutes);
+    this.router.use('/whatsapp', whatsappRoutes); // Use the WhatsApp routes
 
     // 404 handler
     this.router.use('*', (req, res) => {

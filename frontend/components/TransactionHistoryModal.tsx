@@ -25,17 +25,21 @@ import {
   TrendingDown,
   ChevronDown
 } from 'lucide-react-native';
+import { useTransactionHistory } from '../hooks/useTransactionHistory';
+import { useAccount } from '../contexts/AccountContext';
 
 interface Transaction {
-  id: string;
-  type: 'sent' | 'received' | 'purchase' | 'lending' | 'withdrawal' | 'deposit';
-  description: string;
+  transactionId: string;
+  type: 'SEND' | 'RECEIVE' | 'BURN';
   amount: number;
-  timestamp: string;
-  status: 'completed' | 'pending' | 'failed';
-  category: string;
-  recipient?: string;
-  reference?: string;
+  currency: string;
+  gasFee: number;
+  time: number;
+  to: string;
+  from: string;
+  fromAlias: string;
+  toAlias: string;
+  memo: string;
 }
 
 interface TransactionHistoryModalProps {
@@ -43,16 +47,19 @@ interface TransactionHistoryModalProps {
   onClose: () => void;
 }
 
-type FilterType = 'all' | 'sent' | 'received' | 'purchase' | 'lending';
+type FilterType = 'all' | 'SEND' | 'RECEIVE' | 'BURN';
 type SortType = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc';
 
 export default function TransactionHistoryModal({ visible, onClose }: TransactionHistoryModalProps) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const { currentAccount } = useAccount();
+  const { 
+    transactions, 
+    isLoading, 
+    error, 
+    refresh, 
+    lastUpdated 
+  } = useTransactionHistory(currentAccount?.accountId);
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(1);
   
   // Filter and search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,73 +67,13 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
   const [sortType, setSortType] = useState<SortType>('date_desc');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Generate mock transaction data
-  const generateTransactions = (pageNum: number, pageSize: number = 20): Transaction[] => {
-    const types: Transaction['type'][] = ['sent', 'received', 'purchase', 'lending', 'withdrawal', 'deposit'];
-    const categories = ['Food', 'Transport', 'Shopping', 'Bills', 'Entertainment', 'Healthcare', 'Education', 'Other'];
-    const descriptions = [
-      'Grocery Store Payment', 'Uber Ride', 'Netflix Subscription', 'Electricity Bill',
-      'Coffee Shop', 'Online Shopping', 'Restaurant', 'Fuel Payment',
-      'Movie Tickets', 'Gym Membership', 'Phone Bill', 'Internet Bill',
-      'Medical Consultation', 'Book Purchase', 'Gift to Friend', 'Salary Received'
-    ];
-
-    const mockTransactions: Transaction[] = [];
-    const startId = (pageNum - 1) * pageSize;
-
-    for (let i = 0; i < pageSize; i++) {
-      const id = (startId + i + 1).toString();
-      const type = types[Math.floor(Math.random() * types.length)];
-      const description = descriptions[Math.floor(Math.random() * descriptions.length)];
-      const amount = Math.floor(Math.random() * 2000) + 10;
-      const daysAgo = Math.floor(Math.random() * 90);
-      const timestamp = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
-      
-      mockTransactions.push({
-        id,
-        type,
-        description,
-        amount,
-        timestamp,
-        status: Math.random() > 0.1 ? 'completed' : Math.random() > 0.5 ? 'pending' : 'failed',
-        category: categories[Math.floor(Math.random() * categories.length)],
-        recipient: type === 'sent' ? 'John Doe' : undefined,
-        reference: `REF${id.padStart(6, '0')}`,
-      });
-    }
-
-    return mockTransactions;
-  };
-
-  const loadTransactions = useCallback(async (pageNum: number, isRefresh: boolean = false) => {
-    if (pageNum === 1) {
-      setLoading(true);
-    } else {
-      setLoadingMore(true);
-    }
-
+  const loadTransactions = useCallback(async () => {
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newTransactions = generateTransactions(pageNum);
-      
-      if (isRefresh || pageNum === 1) {
-        setTransactions(newTransactions);
-      } else {
-        setTransactions(prev => [...prev, ...newTransactions]);
-      }
-      
-      // Simulate end of data after 5 pages
-      setHasMore(pageNum < 5);
-      
+      await refresh();
     } catch (error) {
       Alert.alert('Error', 'Failed to load transactions');
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
     }
-  }, []);
+  }, [refresh]);
 
   const applyFiltersAndSort = useCallback(() => {
     let filtered = [...transactions];
@@ -134,9 +81,10 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
     // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(transaction =>
-        transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        transaction.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        transaction.reference?.toLowerCase().includes(searchQuery.toLowerCase())
+        transaction.memo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transaction.fromAlias.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transaction.toAlias.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transaction.transactionId.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
@@ -149,9 +97,9 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
     filtered.sort((a, b) => {
       switch (sortType) {
         case 'date_desc':
-          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+          return b.time - a.time;
         case 'date_asc':
-          return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          return a.time - b.time;
         case 'amount_desc':
           return b.amount - a.amount;
         case 'amount_asc':
@@ -166,8 +114,7 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
 
   useEffect(() => {
     if (visible) {
-      loadTransactions(1, true);
-      setPage(1);
+      loadTransactions();
     }
   }, [visible, loadTransactions]);
 
@@ -175,28 +122,14 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
     applyFiltersAndSort();
   }, [applyFiltersAndSort]);
 
-  const handleLoadMore = () => {
-    if (!loadingMore && hasMore) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      loadTransactions(nextPage);
-    }
-  };
-
   const getTransactionIcon = (type: Transaction['type']) => {
     switch (type) {
-      case 'sent':
+      case 'SEND':
         return <ArrowUpRight size={20} color="#E74C3C" />;
-      case 'received':
+      case 'RECEIVE':
         return <ArrowDownLeft size={20} color="#27AE60" />;
-      case 'purchase':
-        return <ShoppingCart size={20} color="#3498DB" />;
-      case 'lending':
-        return <Users size={20} color="#9B59B6" />;
-      case 'withdrawal':
-        return <TrendingDown size={20} color="#E67E22" />;
-      case 'deposit':
-        return <TrendingUp size={20} color="#27AE60" />;
+      case 'BURN':
+        return <Zap size={20} color="#E67E22" />;
       default:
         return <Zap size={20} color="#95A5A6" />;
     }
@@ -204,12 +137,10 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
 
   const getAmountColor = (type: Transaction['type']) => {
     switch (type) {
-      case 'received':
-      case 'deposit':
+      case 'RECEIVE':
         return '#27AE60';
-      case 'sent':
-      case 'purchase':
-      case 'withdrawal':
+      case 'SEND':
+      case 'BURN':
         return '#E74C3C';
       default:
         return '#2C3E50';
@@ -218,20 +149,18 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
 
   const getAmountPrefix = (type: Transaction['type']) => {
     switch (type) {
-      case 'received':
-      case 'deposit':
+      case 'RECEIVE':
         return '+';
-      case 'sent':
-      case 'purchase':
-      case 'withdrawal':
+      case 'SEND':
+      case 'BURN':
         return '-';
       default:
         return '';
     }
   };
 
-  const formatDate = (timestamp: string) => {
-    const date = new Date(timestamp);
+  const formatDate = (time: number) => {
+    const date = new Date(time);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
     
@@ -248,26 +177,30 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
         {getTransactionIcon(item.type)}
       </View>
       <View style={styles.transactionDetails}>
-        <Text style={styles.transactionDescription}>{item.description}</Text>
-        <Text style={styles.transactionCategory}>{item.category}</Text>
-        <Text style={styles.transactionTime}>{formatDate(item.timestamp)}</Text>
+        <Text style={styles.transactionDescription}>{item.memo || `${item.type} ${item.currency}`}</Text>
+        <Text style={styles.transactionCategory}>
+          {item.type === 'SEND' ? `To: ${item.toAlias}` : 
+           item.type === 'RECEIVE' ? `From: ${item.fromAlias}` : 
+           `Burn: ${item.currency}`}
+        </Text>
+        <Text style={styles.transactionTime}>{formatDate(item.time)}</Text>
       </View>
       <View style={styles.transactionAmount}>
         <Text style={[
           styles.transactionAmountText,
           { color: getAmountColor(item.type) }
         ]}>
-          {getAmountPrefix(item.type)}R{item.amount.toFixed(2)}
+          {getAmountPrefix(item.type)}{item.amount.toFixed(2)} {item.currency}
         </Text>
         <View style={[
           styles.statusBadge,
-          { backgroundColor: item.status === 'completed' ? '#E8F5E8' : item.status === 'pending' ? '#FFF3CD' : '#F8D7DA' }
+          { backgroundColor: '#E8F5E8' }
         ]}>
           <Text style={[
             styles.statusText,
-            { color: item.status === 'completed' ? '#27AE60' : item.status === 'pending' ? '#856404' : '#721C24' }
+            { color: '#27AE60' }
           ]}>
-            {item.status}
+            completed
           </Text>
         </View>
       </View>
@@ -308,13 +241,22 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <X size={24} color="#2C3E50" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Transaction History</Text>
-          <TouchableOpacity 
-            onPress={() => setShowFilters(!showFilters)} 
-            style={styles.filterToggle}
-          >
-            <Filter size={20} color="#0C7C59" />
-          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Transaction History</Text>
+            {lastUpdated && (
+              <Text style={styles.lastUpdatedText}>
+                Last updated: {lastUpdated.toLocaleTimeString()}
+              </Text>
+            )}
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              onPress={() => setShowFilters(!showFilters)} 
+              style={styles.filterToggle}
+            >
+              <Filter size={20} color="#0C7C59" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search Bar */}
@@ -336,10 +278,9 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
             <Text style={styles.filtersTitle}>Filter by Type</Text>
             <View style={styles.filterButtons}>
               <FilterButton title="All" value="all" isActive={filterType === 'all'} />
-              <FilterButton title="Sent" value="sent" isActive={filterType === 'sent'} />
-              <FilterButton title="Received" value="received" isActive={filterType === 'received'} />
-              <FilterButton title="Purchase" value="purchase" isActive={filterType === 'purchase'} />
-              <FilterButton title="Lending" value="lending" isActive={filterType === 'lending'} />
+              <FilterButton title="Sent" value="SEND" isActive={filterType === 'SEND'} />
+              <FilterButton title="Received" value="RECEIVE" isActive={filterType === 'RECEIVE'} />
+              <FilterButton title="Burn" value="BURN" isActive={filterType === 'BURN'} />
             </View>
 
             <Text style={styles.filtersTitle}>Sort by</Text>
@@ -356,15 +297,19 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
         <FlatList
           data={filteredTransactions}
           renderItem={TransactionItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.transactionId}
           showsVerticalScrollIndicator={false}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
           ListEmptyComponent={
-            loading ? (
+            isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#0C7C59" />
                 <Text style={styles.loadingText}>Loading transactions...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.emptyContainer}>
+                <Calendar size={48} color="#BDC3C7" />
+                <Text style={styles.emptyText}>Error loading transactions</Text>
+                <Text style={styles.emptySubtext}>{error}</Text>
               </View>
             ) : (
               <View style={styles.emptyContainer}>
@@ -373,14 +318,6 @@ export default function TransactionHistoryModal({ visible, onClose }: Transactio
                 <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
               </View>
             )
-          }
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color="#0C7C59" />
-                <Text style={styles.loadingMoreText}>Loading more...</Text>
-              </View>
-            ) : null
           }
         />
       </SafeAreaView>
@@ -406,10 +343,24 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
     color: '#2C3E50',
+  },
+  lastUpdatedText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#7F8C8D',
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   filterToggle: {
     padding: 4,

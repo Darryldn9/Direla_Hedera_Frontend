@@ -4,7 +4,9 @@ import {
     PrivateKey,
     Client,
     Hbar,
-    AccountBalanceQuery
+    AccountBalanceQuery,
+    TokenSupplyType,
+    TokenType
   } from '@hashgraph/sdk';
   import { config, validateConfig } from '../config/index.js';
   import { logger } from '../utils/logger.js';
@@ -41,17 +43,23 @@ import {
       }
     }
   
-    async createStablecoin(): Promise<string> {
+    async createStablecoin(): Promise<{ tokenId: string; supplyKey: string }> {
       try {
         logger.info('Creating Demo USD Stablecoin token...');
+
+        // Generate a supply key for minting/burning
+        const supplyKey = PrivateKey.generateED25519();
   
         const tokenCreateTx = new TokenCreateTransaction()
           .setTokenName("Demo USD Stablecoin")
           .setTokenSymbol("DUSD")
+          .setTokenType(TokenType.FungibleCommon)
           .setDecimals(2)                    // 100 = $1.00
           .setInitialSupply(10_000_000)      // $100,000.00 worth
+          .setSupplyType(TokenSupplyType.Infinite) // Allow infinite supply
           .setTreasuryAccountId(this.operatorId)
           .setAdminKey(this.operatorKey)
+          .setSupplyKey(supplyKey)           // Supply key for minting/burning
           .setMaxTransactionFee(Hbar.fromTinybars(500_000_000)); // 5 HBAR Fee Max
   
         // Execute transaction
@@ -71,16 +79,18 @@ import {
           symbol: "DUSD",
           decimals: 2,
           initialSupply: "10,000,000 (represents $100,000.00)",
-          treasuryAccount: this.operatorId.toString()
+          treasuryAccount: this.operatorId.toString(),
+          supplyKey: supplyKey.toString()
         });
   
         logger.info('Next steps:', {
           step1: `Add this to your .env file: STABLECOIN_TOKEN_ID=${tokenId}`,
-          step2: 'Restart your application to load the new token ID',
-          step3: 'Test token association and transfers'
+          step2: `Add supply key to your .env file: STABLECOIN_SUPPLY_KEY=${supplyKey.toString()}`,
+          step3: 'Restart your application to load the new token ID',
+          step4: 'Test token association and transfers'
         });
   
-        return tokenId;
+        return { tokenId, supplyKey: supplyKey.toString() };
       } catch (error) {
         logger.error('Token creation failed', { error });
         throw error;
@@ -111,9 +121,12 @@ import {
       await tokenCreator.getAccountBalance();
       
       // Create the token
-      const tokenId = await tokenCreator.createStablecoin();
+      const result = await tokenCreator.createStablecoin();
       
-      logger.success('Script completed successfully', { tokenId });
+      logger.success('Script completed successfully', { 
+        tokenId: result.tokenId,
+        supplyKey: result.supplyKey
+      });
       
       process.exit(0);
     } catch (error) {

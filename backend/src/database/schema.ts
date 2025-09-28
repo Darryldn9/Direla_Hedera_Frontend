@@ -34,6 +34,8 @@ export interface HederaAccount {
   created_at: string;
   updated_at: string;
   user_id: string; // UUID foreign key to users.user_id
+  whatsapp_phone: string | null; // WhatsApp phone number
+  preferred_currency: string; // User's preferred currency (e.g., 'USD', 'EUR', 'HBAR')
 }
 
 export interface NewHederaAccount {
@@ -44,6 +46,8 @@ export interface NewHederaAccount {
   balance?: number;
   is_active?: boolean;
   user_id: string;
+  whatsapp_phone?: string | null; // WhatsApp phone number
+  preferred_currency?: string; // User's preferred currency (defaults to 'HBAR')
 }
 
 // Cached Transaction table structure

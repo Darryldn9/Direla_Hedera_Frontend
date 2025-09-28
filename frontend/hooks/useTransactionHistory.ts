@@ -8,12 +8,14 @@ interface UseTransactionHistoryReturn {
   error: string | null;
   fetchTransactionHistory: (accountId: string, limit?: number) => Promise<void>;
   refresh: () => Promise<void>;
+  lastUpdated: Date | null;
 }
 
 export function useTransactionHistory(accountId?: string, limit: number = 50): UseTransactionHistoryReturn {
   const [transactions, setTransactions] = useState<TransactionHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const lastFetchedAccountId = useRef<string | null>(null);
   
   // Memoize the service to prevent recreation on every render
@@ -35,8 +37,9 @@ export function useTransactionHistory(accountId?: string, limit: number = 50): U
       const response = await hederaService.getTransactionHistory(targetAccountId, transactionLimit || limit);
       
       if (response.success && response.data) {
-        console.log('Transaction history fetched successfully:', response.data);
+        // console.log('Transaction history fetched successfully:', response.data);
         setTransactions(response.data);
+        setLastUpdated(new Date());
       } else {
         console.error('Failed to fetch transaction history:', response.error);
         setError(response.error || 'Failed to fetch transaction history');
@@ -65,11 +68,13 @@ export function useTransactionHistory(accountId?: string, limit: number = 50): U
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]); // fetchTransactionHistory is stable due to useCallback with stable dependencies
 
+
   return {
     transactions,
     isLoading,
     error,
     fetchTransactionHistory,
     refresh,
+    lastUpdated,
   };
 }

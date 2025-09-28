@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { ChevronDown, Wallet, Check } from 'lucide-react-native';
-import { HederaAccount } from '../types/api';
+import { HederaAccount, AccountBalance } from '../types/api';
 import { useAccount } from '../contexts/AccountContext';
+import { useHederaOperations } from '../hooks/useHedera';
 
 interface AccountDropdownProps {
   onAccountSelect?: (account: HederaAccount | null) => void;
@@ -20,6 +21,9 @@ interface AccountDropdownProps {
 export default function AccountDropdown({ onAccountSelect, disabled = false }: AccountDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { accounts, selectedAccount, isLoading, selectAccount } = useAccount();
+  const { getMultiCurrencyBalance } = useHederaOperations();
+  const [accountBalances, setAccountBalances] = useState<Record<string, AccountBalance>>({});
+  const [balancesLoading, setBalancesLoading] = useState<Record<string, boolean>>({});
 
   const handleAccountSelect = async (account: HederaAccount) => {
     await selectAccount(account);
@@ -27,15 +31,67 @@ export default function AccountDropdown({ onAccountSelect, disabled = false }: A
     onAccountSelect?.(account);
   };
 
+  // Fetch real multicurrency balance for an account
+  const fetchAccountBalance = async (accountId: string) => {
+    setBalancesLoading(prev => ({ ...prev, [accountId]: true }));
+    try {
+      const balance = await getMultiCurrencyBalance(accountId);
+      if (balance) {
+        setAccountBalances(prev => ({
+          ...prev,
+          [accountId]: balance
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching account balance:', error);
+    } finally {
+      setBalancesLoading(prev => ({ ...prev, [accountId]: false }));
+    }
+  };
+
+  // Fetch balances for all accounts when accounts change
+  useEffect(() => {
+    if (accounts.length > 0) {
+      accounts.forEach(account => {
+        fetchAccountBalance(account.account_id);
+      });
+    }
+  }, [accounts]);
+
+
   const formatAccountDisplay = (account: HederaAccount) => {
     const alias = account.alias || 'Unnamed Account';
     const shortAccountId = account.account_id.length > 12 
       ? `${account.account_id.substring(0, 6)}...${account.account_id.substring(account.account_id.length - 6)}`
       : account.account_id;
     
+    // Get the real multicurrency balance
+    const balance = accountBalances[account.account_id];
+    const isBalanceLoading = balancesLoading[account.account_id];
+    
+    let balanceText = '';
+    if (isBalanceLoading) {
+      balanceText = 'Loading...';
+    } else if (balance && balance.balances && balance.balances.length > 0) {
+      // Find the balance for the account's currency from the database
+      const accountCurrency = account.currency || 'HBAR';
+      const currencyBalance = balance.balances.find(b => b.code === accountCurrency);
+      
+      if (currencyBalance) {
+        balanceText = `${currencyBalance.amount.toFixed(2)} ${accountCurrency}`;
+      } else {
+        // Fallback to HBAR if account currency not found
+        const hbarBalance = balance.balances.find(b => b.code === 'HBAR');
+        balanceText = hbarBalance ? `${hbarBalance.amount.toFixed(2)} HBAR` : '0.00 HBAR';
+      }
+    } else {
+      // Fallback if no balance data available
+      balanceText = '0.00 HBAR';
+    }
+    
     return {
       title: alias,
-      subtitle: `${account.balance.toFixed(2)} HBAR`,
+      subtitle: balanceText,
     };
   };
 

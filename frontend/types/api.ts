@@ -40,6 +40,7 @@ export interface HederaAccount {
   user_id: string;
   created_at: string;
   updated_at: string;
+  currency: string;
 }
 
 export interface CreateHederaAccountRequest {
@@ -63,9 +64,14 @@ export interface CreateHederaAccountResponse {
   updated_at: string;
 }
 
+export interface CurrencyBalance {
+  code: string;
+  amount: number;
+}
+
 export interface AccountBalance {
   accountId: string;
-  balance: number;
+  balances: CurrencyBalance[];
 }
 
 export interface AccountInfo {
@@ -82,6 +88,9 @@ export interface TransferRequest {
   fromAccountId: string;
   toAccountId: string;
   amount: number;
+  fromCurrency: string;
+  toCurrency: string;
+  quote: CurrencyQuote;
 }
 
 export interface PaymentRequest {
@@ -89,6 +98,9 @@ export interface PaymentRequest {
   toAccountId: string;
   amount: number;
   memo?: string;
+  fromCurrency: string;
+  toCurrency: string;
+  quote: CurrencyQuote;
 }
 
 export interface TransactionResponse {
@@ -108,7 +120,8 @@ export interface TransactionHistoryItem {
   fromAlias: string;
   toAlias: string;
   transactionId: string;
-  type: 'SEND' | 'RECEIVE';
+  type: 'SEND' | 'RECEIVE' | 'BURN';
+  memo?: string;
 }
 
 // Transaction with DID Types
@@ -118,6 +131,9 @@ export interface ProcessPaymentWithDIDRequest {
   amount: number;
   memo?: string;
   merchant_user_id?: string;
+  fromCurrency?: string;
+  toCurrency?: string;
+  quote?: CurrencyQuote;
 }
 
 export interface ProcessPaymentWithDIDResponse {
@@ -174,6 +190,25 @@ export interface RequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
   body?: any;
+}
+
+// Currency Quote Types
+export interface CurrencyQuote {
+  quoteId: string;
+  fromCurrency: string;
+  toCurrency: string;
+  fromAmount: number;
+  toAmount: number;
+  exchangeRate: number;
+  expiresAt: number; // Unix timestamp
+}
+
+export interface GenerateQuoteRequest {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  fromCurrency?: string;
+  toCurrency?: string;
 }
 
 // Service Configuration

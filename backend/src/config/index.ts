@@ -11,7 +11,11 @@ export const config = {
   hedera: {
     accountId: process.env.HEDERA_ACCOUNT_ID || '',
     privateKey: process.env.HEDERA_PRIVATE_KEY || '',
-    network: (process.env.HEDERA_NETWORK as 'testnet' | 'mainnet') || 'testnet'
+    network: (process.env.HEDERA_NETWORK as 'testnet' | 'mainnet') || 'testnet',
+    usdTokenId: process.env.USD_TOKEN_ID || '',
+    usdSupplyKey: process.env.USD_SUPPLY_KEY || '',
+    zarTokenId: process.env.ZAR_TOKEN_ID || '',
+    zarSupplyKey: process.env.ZAR_SUPPLY_KEY || ''
   } as HederaConfig,
   
   mirrorNode: {

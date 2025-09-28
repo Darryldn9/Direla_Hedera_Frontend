@@ -5,14 +5,15 @@ import {
   HederaAccount, 
   CreateHederaAccountRequest, 
   AccountBalance, 
-  AccountInfo 
+  AccountInfo,
+  CreateHederaAccountResponse
 } from '../types/api';
 
 /**
  * Hook for Hedera account operations
  */
 export function useHederaAccounts() {
-  const createAccount = useApi<HederaAccount>(api.hedera.createAccount.bind(api.hedera));
+  const createAccount = useApi<CreateHederaAccountResponse>(api.hedera.createAccount.bind(api.hedera));
   const getAllAccounts = useApi<HederaAccount[]>(api.hedera.getAllAccounts.bind(api.hedera));
   const getActiveAccounts = useApi<HederaAccount[]>(api.hedera.getActiveAccounts.bind(api.hedera));
   const getAccountById = useApi<HederaAccount>(api.hedera.getAccountById.bind(api.hedera));
@@ -63,9 +64,11 @@ export function useHederaOperations() {
   const refreshAccountBalance = useCallback(async (accountId: string) => {
     const balance = await balances.getAccountBalance.execute(accountId);
     if (balance) {
+      // Extract HBAR balance for backward compatibility
+      const hbarBalance = balance.balances.find(b => b.code === 'HBAR')?.amount || 0;
       setAccountBalances(prev => ({
         ...prev,
-        [accountId]: balance.balance
+        [accountId]: hbarBalance
       }));
     }
     return balance;
@@ -73,7 +76,10 @@ export function useHederaOperations() {
 
   const refreshAllBalances = useCallback(async (accountIds: string[]) => {
     const balancePromises = accountIds.map(id => 
-      balances.getAccountBalance.execute(id).then(balance => ({ id, balance: balance?.balance || 0 }))
+      balances.getAccountBalance.execute(id).then(balance => ({ 
+        id, 
+        balance: balance?.balances.find(b => b.code === 'HBAR')?.amount || 0 
+      }))
     );
     
     const results = await Promise.all(balancePromises);
@@ -91,6 +97,10 @@ export function useHederaOperations() {
     return accountBalances[accountId] || 0;
   }, [accountBalances]);
 
+  const getMultiCurrencyBalance = useCallback(async (accountId: string) => {
+    return await balances.getAccountBalance.execute(accountId);
+  }, [balances.getAccountBalance]);
+
   return {
     selectedAccount,
     accountBalances,
@@ -98,6 +108,7 @@ export function useHederaOperations() {
     refreshAccountBalance,
     refreshAllBalances,
     getAccountBalanceLocal,
+    getMultiCurrencyBalance,
     ...accounts,
     ...balances,
   };

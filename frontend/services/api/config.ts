@@ -3,11 +3,11 @@ import { ApiConfig } from '../../types/api';
 // Default API configuration
 export const defaultApiConfig: ApiConfig = {
   baseUrl: 'http://localhost:3000/api',
-  timeout: 10000, // 10 seconds
+  timeout: 60000, // 60 seconds - increased for payment processing
   retryAttempts: 3,
 };
 
-const MY_IP = "192.168.0.100";
+const MY_IP = "192.168.0.100"; // Replace with your actual IP address
 
 // Environment-based configuration
 export const getApiConfig = (): ApiConfig => {
@@ -48,6 +48,7 @@ export const API_ENDPOINTS = {
   // Hedera Operations
   HEDERA_TRANSFER: '/hedera/transfer',
   HEDERA_PAYMENT: '/hedera/payment',
+  HEDERA_QUOTE: '/hedera/quote',
   HEDERA_TRANSACTION_HISTORY: (accountId: string) => `/hedera/transaction-history/${accountId}`,
   
   // Cached Transactions

@@ -353,12 +353,12 @@ export class HederaAccountServiceImpl implements HederaAccountService {
     }
   }
 
-  async getAccountBalance(accountId: string): Promise<number> {
+  async getAccountBalance(accountId: string): Promise<{ code: string; amount: number }[]> {
     try {
       // Try cache first
       const key = cacheKeys.balance(accountId);
-      const cached = await cacheGet<number>(key);
-      if (typeof cached === 'number') {
+      const cached = await cacheGet<{ code: string; amount: number }[]>(key);
+      if (cached !== null) {
         logger.debug('Account balance served from cache', { accountId });
         return cached;
       }
@@ -367,7 +367,7 @@ export class HederaAccountServiceImpl implements HederaAccountService {
       const balance = await this.hederaInfra.getAccountBalance(accountId);
 
       // Store in cache
-      await cacheSet<number>(key, balance);
+      await cacheSet<{ code: string; amount: number }[]>(key, balance);
 
       logger.info('Account balance retrieved', { accountId, balance });
       return balance;

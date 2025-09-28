@@ -43,6 +43,14 @@ export function Toast({ toast, onHide }: ToastProps) {
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Auto-hide after duration (default 3 seconds)
+    const duration = toast.duration || 3000;
+    const timer = setTimeout(() => {
+      handleHide();
+    }, duration);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const handleHide = () => {
