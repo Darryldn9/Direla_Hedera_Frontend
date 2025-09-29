@@ -252,4 +252,52 @@ router.post('/terms/:termsId/convert', async (req: Request, res: Response) => {
   }
 });
 
+// Process BNPL installment payment (burn & mint)
+router.post('/installment/pay', async (req: Request, res: Response) => {
+  try {
+    const {
+      agreementId,
+      consumerAccountId,
+      merchantAccountId,
+      amount,
+      currency
+    } = req.body;
+
+    // Validate required fields
+    if (!agreementId || !consumerAccountId || !merchantAccountId || !amount || !currency) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: agreementId, consumerAccountId, merchantAccountId, amount, currency'
+      } as ApiResponse);
+    }
+
+    const result = await bnplService.processInstallmentPayment(
+      agreementId,
+      consumerAccountId,
+      merchantAccountId,
+      parseFloat(amount),
+      currency
+    );
+
+    if (result.success) {
+      res.json({
+        success: true,
+        data: result,
+        message: 'BNPL installment payment processed successfully'
+      } as ApiResponse);
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to process installment payment'
+      } as ApiResponse);
+    }
+  } catch (error) {
+    console.error('Error processing BNPL installment payment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process BNPL installment payment'
+    } as ApiResponse);
+  }
+});
+
 export default router;

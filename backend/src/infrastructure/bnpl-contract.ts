@@ -30,6 +30,11 @@ export const BNPL_CONTRACT_ABI = [
         "internalType": "uint256",
         "name": "numInstallments",
         "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "tokenId",
+        "type": "string"
       }
     ],
     "name": "createBNPLAgreement",
@@ -53,7 +58,7 @@ export const BNPL_CONTRACT_ABI = [
     ],
     "name": "payInstallment",
     "outputs": [],
-    "stateMutability": "payable",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -80,7 +85,17 @@ export const BNPL_CONTRACT_ABI = [
           },
           {
             "internalType": "uint256",
-            "name": "totalAmount",
+            "name": "principalAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "interestRate",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "totalOwed",
             "type": "uint256"
           },
           {
@@ -97,6 +112,11 @@ export const BNPL_CONTRACT_ABI = [
             "internalType": "bool",
             "name": "isCompleted",
             "type": "bool"
+          },
+          {
+            "internalType": "string",
+            "name": "tokenId",
+            "type": "string"
           }
         ],
         "internalType": "struct BNPL.Agreement",
@@ -105,6 +125,52 @@ export const BNPL_CONTRACT_ABI = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "agreementId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "consumer",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "merchant",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "tokenId",
+        "type": "string"
+      }
+    ],
+    "name": "processTokenPayment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newTreasury",
+        "type": "address"
+      }
+    ],
+    "name": "updateTreasury",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -204,6 +270,7 @@ export interface BNPLAgreement {
   numInstallments: string;
   installmentsPaid: string;
   isCompleted: boolean;
+  tokenId: string;
 }
 
 export interface BNPLContractResult {
@@ -263,6 +330,7 @@ export class BNPLContractInfrastructure {
     principalAmount: string, // in wei
     interestRate: number, // in basis points (e.g., 500 = 5%)
     numInstallments: number,
+    tokenId: string,
     signerPrivateKey: string
   ): Promise<BNPLContractResult> {
     try {
@@ -271,7 +339,8 @@ export class BNPLContractInfrastructure {
         merchantAddress,
         principalAmount,
         interestRate,
-        numInstallments
+        numInstallments,
+        tokenId
       });
 
       // Create signer from private key
@@ -302,7 +371,8 @@ export class BNPLContractInfrastructure {
         merchantAddress,
         principalAmount,
         interestRate,
-        numInstallments
+        numInstallments,
+        tokenId
       );
 
       logger.info('BNPL agreement transaction submitted', {
@@ -313,10 +383,24 @@ export class BNPLContractInfrastructure {
       const receipt = await tx.wait();
 
       if (receipt.status === 1) {
+        // Debug: Log all events
+        logger.info('Transaction receipt events', {
+          eventCount: receipt.events?.length || 0,
+          events: receipt.events?.map((event: any) => ({
+            event: event.event,
+            args: event.args
+          })) || []
+        });
+
         // Extract agreement ID from the event
         const agreementCreatedEvent = receipt.events?.find(
           (event: any) => event.event === 'AgreementCreated'
         );
+
+        logger.info('AgreementCreated event found', {
+          found: !!agreementCreatedEvent,
+          event: agreementCreatedEvent
+        });
 
         const agreementId = agreementCreatedEvent?.args?.agreementId?.toString();
 
@@ -403,10 +487,8 @@ export class BNPLContractInfrastructure {
       const installmentAmount = ethers.BigNumber.from(agreement.totalOwed)
         .div(agreement.numInstallments);
 
-      // Call the smart contract method with payment
-      const tx = await contractWithSigner.payInstallment(agreementId, {
-        value: installmentAmount
-      });
+      // Call the smart contract method (no payment needed as we use burn/mint)
+      const tx = await contractWithSigner.payInstallment(agreementId);
 
       logger.info('BNPL installment transaction submitted', {
         agreementId,
@@ -454,6 +536,90 @@ export class BNPLContractInfrastructure {
   }
 
   /**
+   * Process token payment with burn/mint operations
+   */
+  async processTokenPayment(
+    agreementId: string,
+    consumer: string,
+    merchant: string,
+    amount: string,
+    tokenId: string,
+    treasuryPrivateKey: string
+  ): Promise<BNPLContractResult> {
+    try {
+      logger.info('Processing token payment with burn/mint', {
+        agreementId,
+        consumer,
+        merchant,
+        amount,
+        tokenId
+      });
+
+      // Create signer from treasury private key
+      let hexPrivateKey = treasuryPrivateKey;
+      if (treasuryPrivateKey?.startsWith('30') && treasuryPrivateKey.length > 60) {
+        hexPrivateKey = "0x" + treasuryPrivateKey.slice(-64);
+      }
+      
+      const signer = new ethers.Wallet(hexPrivateKey, this.provider);
+      const contractWithSigner = this.contract.connect(signer);
+
+      // Call the smart contract method
+      const tx = await contractWithSigner.processTokenPayment(
+        agreementId,
+        consumer,
+        merchant,
+        amount,
+        tokenId
+      );
+
+      logger.info('Token payment transaction submitted', {
+        agreementId,
+        amount,
+        tokenId,
+        transactionHash: tx.hash
+      });
+
+      // Wait for transaction to be mined
+      const receipt = await tx.wait();
+
+      if (receipt.status === 1) {
+        logger.info('Token payment processed successfully', {
+          agreementId,
+          transactionHash: tx.hash
+        });
+
+        return {
+          success: true,
+          transactionId: tx.hash,
+          agreementId: agreementId
+        };
+      } else {
+        logger.error('Token payment transaction failed', {
+          agreementId,
+          transactionHash: tx.hash,
+          status: receipt.status
+        });
+
+        return {
+          success: false,
+          error: `Transaction failed with status: ${receipt.status}`
+        };
+      }
+    } catch (error) {
+      logger.error('Token payment processing failed', {
+        agreementId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * Get agreement details from the smart contract
    */
   async getAgreement(agreementId: string): Promise<BNPLAgreement | null> {
@@ -468,7 +634,8 @@ export class BNPLContractInfrastructure {
         totalOwed: agreement.totalOwed.toString(),
         numInstallments: agreement.numInstallments.toString(),
         installmentsPaid: agreement.installmentsPaid.toString(),
-        isCompleted: agreement.isCompleted
+        isCompleted: agreement.isCompleted,
+        tokenId: agreement.tokenId
       };
     } catch (error) {
       logger.error('Error getting BNPL agreement', {

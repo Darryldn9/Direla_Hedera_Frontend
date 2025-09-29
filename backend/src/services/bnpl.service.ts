@@ -32,6 +32,20 @@ export class BNPLService {
   }
 
   /**
+   * Get token ID for a given currency
+   */
+  private getTokenIdForCurrency(currency: string): string | null {
+    switch (currency.toUpperCase()) {
+      case 'USD':
+        return process.env.USD_TOKEN_ID || null;
+      case 'ZAR':
+        return process.env.ZAR_TOKEN_ID || null;
+      default:
+        return null;
+    }
+  }
+
+  /**
    * Publish BNPL event to HCS topic
    */
   private async publishToHCS(event: BNPLTermsCreatedEvent | BNPLTermsAcceptedEvent | BNPLTermsRejectedEvent): Promise<HCSMessageResult> {
@@ -410,6 +424,12 @@ export class BNPLService {
           privateKeyPreview: merchantAccount.private_key?.substring(0, 10) + '...'
         });
 
+        // Get token ID for the currency
+        const tokenId = this.getTokenIdForCurrency(currentTerms.currency);
+        if (!tokenId) {
+          throw new Error(`No token ID found for currency: ${currentTerms.currency}`);
+        }
+
         // Create BNPL agreement on smart contract
         const contractResult = await this.bnplContract.createBNPLAgreement(
           consumerEVMAddress,
@@ -417,6 +437,7 @@ export class BNPLService {
           principalAmountWei.toString(),
           interestRateBasisPoints,
           currentTerms.installment_count,
+          tokenId,
           merchantAccount.private_key
         );
 
@@ -876,6 +897,159 @@ export class BNPLService {
         error
       });
       throw error;
+    }
+  }
+
+  /**
+   * Process BNPL installment payment with burn/mint operations
+   */
+  async processInstallmentPayment(
+    agreementId: string,
+    consumerAccountId: string,
+    merchantAccountId: string,
+    amount: number,
+    currency: string
+  ): Promise<{ success: boolean; transactionId?: string | undefined; error?: string }> {
+    try {
+      logger.info('Processing BNPL installment payment with burn/mint', {
+        agreementId,
+        consumerAccountId,
+        merchantAccountId,
+        amount,
+        currency
+      });
+
+      // Get token ID for the currency
+      const tokenId = this.getTokenIdForCurrency(currency);
+      if (!tokenId) {
+        throw new Error(`No token ID found for currency: ${currency}`);
+      }
+
+      // Get consumer and merchant account details
+      const { data: consumerAccount, error: consumerError } = await this.supabase
+        .from('hedera_accounts')
+        .select('*')
+        .eq('account_id', consumerAccountId)
+        .single();
+
+      if (consumerError || !consumerAccount) {
+        throw new Error(`Consumer account not found: ${consumerAccountId}`);
+      }
+
+      const { data: merchantAccount, error: merchantError } = await this.supabase
+        .from('hedera_accounts')
+        .select('*')
+        .eq('account_id', merchantAccountId)
+        .single();
+
+      if (merchantError || !merchantAccount) {
+        throw new Error(`Merchant account not found: ${merchantAccountId}`);
+      }
+
+      // Get treasury account (platform account)
+      const treasuryAccountId = process.env.HEDERA_ACCOUNT_ID;
+      const treasuryPrivateKey = process.env.HEDERA_PRIVATE_KEY;
+      
+      if (!treasuryAccountId || !treasuryPrivateKey) {
+        throw new Error('Treasury account not configured');
+      }
+
+      // Convert amount to base units (multiply by 100 for 2 decimal places)
+      const amountInBaseUnits = Math.round(amount * 100);
+
+      // Burn tokens from consumer
+      logger.info('Burning tokens from consumer', {
+        tokenId,
+        amount: amountInBaseUnits,
+        consumerAccountId
+      });
+
+      const burnResult = await this.hederaInfra.burnToken(
+        tokenId,
+        amountInBaseUnits,
+        consumerAccountId,
+        this.getSupplyKeyForCurrency(currency),
+        consumerAccount.private_key
+      );
+
+      if (burnResult.status !== 'SUCCESS') {
+        throw new Error(`Token burn failed: ${burnResult.message}`);
+      }
+
+      // Mint tokens to merchant
+      logger.info('Minting tokens to merchant', {
+        tokenId,
+        amount: amountInBaseUnits,
+        merchantAccountId
+      });
+
+      const mintResult = await this.hederaInfra.mintToken(
+        tokenId,
+        amountInBaseUnits,
+        this.getSupplyKeyForCurrency(currency),
+        merchantAccountId
+      );
+
+      if (mintResult.status !== 'SUCCESS') {
+        throw new Error(`Token mint failed: ${mintResult.message}`);
+      }
+
+      // Update the smart contract to record the payment
+      const contractResult = await this.bnplContract.processTokenPayment(
+        agreementId,
+        consumerAccountId,
+        merchantAccountId,
+        amountInBaseUnits.toString(),
+        tokenId,
+        treasuryPrivateKey
+      );
+
+      if (!contractResult.success) {
+        throw new Error(`Contract update failed: ${contractResult.error}`);
+      }
+
+      logger.info('BNPL installment payment processed successfully', {
+        agreementId,
+        amount,
+        currency,
+        burnTransactionId: burnResult.transactionId,
+        mintTransactionId: mintResult.transactionId,
+        contractTransactionId: contractResult.transactionId
+      });
+
+      return {
+        success: true,
+        transactionId: contractResult.transactionId
+      };
+
+    } catch (error) {
+      logger.error('Failed to process BNPL installment payment', {
+        agreementId,
+        consumerAccountId,
+        merchantAccountId,
+        amount,
+        currency,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Get supply key for a given currency
+   */
+  private getSupplyKeyForCurrency(currency: string): string {
+    switch (currency.toUpperCase()) {
+      case 'USD':
+        return process.env.USD_SUPPLY_KEY || '';
+      case 'ZAR':
+        return process.env.ZAR_SUPPLY_KEY || '';
+      default:
+        throw new Error(`No supply key found for currency: ${currency}`);
     }
   }
 }
