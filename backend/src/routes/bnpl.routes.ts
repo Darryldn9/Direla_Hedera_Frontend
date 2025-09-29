@@ -152,6 +152,27 @@ router.get('/merchant/:accountId/pending', async (req: Request, res: Response) =
   }
 });
 
+// Get all BNPL terms for merchant (history)
+router.get('/merchant/:accountId', async (req: Request, res: Response) => {
+  try {
+    const { accountId } = req.params;
+
+    const terms = await bnplService.getTermsForMerchant(accountId!);
+
+    res.json({
+      success: true,
+      data: terms,
+      message: 'BNPL terms for merchant retrieved successfully'
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Error getting BNPL terms for merchant', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get BNPL terms for merchant'
+    } as ApiResponse);
+  }
+});
+
 // Get BNPL terms for buyer
 router.get('/buyer/:accountId', async (req: Request, res: Response) => {
   try {
@@ -260,7 +281,8 @@ router.post('/installment/pay', async (req: Request, res: Response) => {
       consumerAccountId,
       merchantAccountId,
       amount,
-      currency
+      currency,
+      payerCurrency
     } = req.body;
 
     // Validate required fields
@@ -276,7 +298,8 @@ router.post('/installment/pay', async (req: Request, res: Response) => {
       consumerAccountId,
       merchantAccountId,
       parseFloat(amount),
-      currency
+      currency,
+      payerCurrency
     );
 
     if (result.success) {

@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { logger } from '../utils/logger';
 import { config } from '../config';
+import { AccountId } from '@hashgraph/sdk';
 
 // BNPL Contract ABI - extracted from the updated Solidity contract
 export const BNPL_CONTRACT_ABI = [
@@ -322,6 +323,47 @@ export class BNPLContractInfrastructure {
   }
 
   /**
+   * Resolve agreementId from a BNPL agreement creation transaction hash
+   */
+  async getAgreementIdFromTxHash(txHash: string): Promise<string | null> {
+    try {
+      const receipt = await this.provider.getTransactionReceipt(txHash);
+      if (!receipt) {
+        logger.warn('No receipt found for transaction hash', { txHash });
+        return null;
+      }
+
+      // Use a precise Interface for AgreementCreated to parse logs reliably
+      const iface = new ethers.utils.Interface([
+        'event AgreementCreated(uint256 indexed agreementId, address indexed consumer, address indexed merchant, uint256 principalAmount, uint256 interestRate, uint256 totalOwed, uint256 numInstallments, string tokenId)'
+      ]);
+
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed && parsed.name === 'AgreementCreated') {
+            const id = parsed.args?.agreementId?.toString();
+            if (id != null) {
+              return id;
+            }
+          }
+        } catch (_) {
+          // not this event, continue
+        }
+      }
+
+      logger.warn('AgreementCreated event not found in receipt logs', { txHash });
+      return null;
+    } catch (error) {
+      logger.error('Failed to resolve agreementId from tx hash', {
+        txHash,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return null;
+    }
+  }
+
+  /**
    * Create a BNPL agreement on the smart contract
    */
   async createBNPLAgreement(
@@ -343,26 +385,13 @@ export class BNPLContractInfrastructure {
         tokenId
       });
 
-      // Create signer from private key
-      // Convert DER-encoded private key to hex if needed
-      let hexPrivateKey = signerPrivateKey;
-      if (signerPrivateKey?.startsWith('30') && signerPrivateKey.length > 60) {
-        logger.warn('Private key appears to be DER-encoded, converting to hex', {
-          privateKeyPreview: signerPrivateKey.substring(0, 20) + '...',
-          privateKeyLength: signerPrivateKey.length
-        });
-        
-        // Convert DER-encoded private key to hex
-        // DER format: 30... (header) + actual key (last 64 characters)
-        hexPrivateKey = "0x" + signerPrivateKey.slice(-64);
-        
-        logger.info('Converted DER private key to hex', {
-          hexPrivateKeyPreview: hexPrivateKey.substring(0, 10) + '...',
-          hexPrivateKeyLength: hexPrivateKey.length
-        });
+      // Validate that the provided key is an ECDSA hex key
+      if (!BNPLContractInfrastructure.isValidEcdsaPrivateKey(signerPrivateKey)) {
+        logger.error('Invalid signer private key type for EVM transaction. Expected secp256k1 (0x...)');
+        throw new Error('Signer private key must be an ECDSA secp256k1 key starting with 0x... and 64 hex chars');
       }
-      
-      const signer = new ethers.Wallet(hexPrivateKey, this.provider);
+
+      const signer = new ethers.Wallet(signerPrivateKey, this.provider);
       const contractWithSigner = this.contract.connect(signer);
 
       // Call the smart contract method
@@ -453,26 +482,13 @@ export class BNPLContractInfrastructure {
     try {
       logger.info('Paying BNPL installment', { agreementId });
 
-      // Create signer from private key
-      // Convert DER-encoded private key to hex if needed
-      let hexPrivateKey = signerPrivateKey;
-      if (signerPrivateKey?.startsWith('30') && signerPrivateKey.length > 60) {
-        logger.warn('Private key appears to be DER-encoded, converting to hex', {
-          privateKeyPreview: signerPrivateKey.substring(0, 20) + '...',
-          privateKeyLength: signerPrivateKey.length
-        });
-        
-        // Convert DER-encoded private key to hex
-        // DER format: 30... (header) + actual key (last 64 characters)
-        hexPrivateKey = "0x" + signerPrivateKey.slice(-64);
-        
-        logger.info('Converted DER private key to hex', {
-          hexPrivateKeyPreview: hexPrivateKey.substring(0, 10) + '...',
-          hexPrivateKeyLength: hexPrivateKey.length
-        });
+      // Validate that the provided key is an ECDSA hex key
+      if (!BNPLContractInfrastructure.isValidEcdsaPrivateKey(signerPrivateKey)) {
+        logger.error('Invalid signer private key type for EVM transaction. Expected secp256k1 (0x...)');
+        throw new Error('Signer private key must be an ECDSA secp256k1 key starting with 0x... and 64 hex chars');
       }
-      
-      const signer = new ethers.Wallet(hexPrivateKey, this.provider);
+
+      const signer = new ethers.Wallet(signerPrivateKey, this.provider);
       const contractWithSigner = this.contract.connect(signer);
 
       // Get agreement details to calculate installment amount
@@ -555,22 +571,27 @@ export class BNPLContractInfrastructure {
         tokenId
       });
 
-      // Create signer from treasury private key
-      let hexPrivateKey = treasuryPrivateKey;
-      if (treasuryPrivateKey?.startsWith('30') && treasuryPrivateKey.length > 60) {
-        hexPrivateKey = "0x" + treasuryPrivateKey.slice(-64);
+      // Validate that the provided key is an ECDSA hex key
+      if (!BNPLContractInfrastructure.isValidEcdsaPrivateKey(treasuryPrivateKey)) {
+        logger.error('Invalid treasury private key type for EVM transaction. Expected secp256k1 (0x...)');
+        throw new Error('Treasury private key must be an ECDSA secp256k1 key starting with 0x... and 64 hex chars');
       }
-      
-      const signer = new ethers.Wallet(hexPrivateKey, this.provider);
+
+      const signer = new ethers.Wallet(treasuryPrivateKey, this.provider);
       const contractWithSigner = this.contract.connect(signer);
 
-      // Call the smart contract method
+      // Determine gas limit (allow override via env, else use a safe default)
+      const gasLimitEnv = process.env.BNPL_EVM_GAS_LIMIT || process.env.EVM_GAS_LIMIT;
+      const gasLimit = gasLimitEnv && /^\d+$/.test(gasLimitEnv) ? Number(gasLimitEnv) : 1500000;
+
+      // Call the smart contract method with explicit gas limit to avoid estimation failures
       const tx = await contractWithSigner.processTokenPayment(
         agreementId,
         consumer,
         merchant,
         amount,
-        tokenId
+        tokenId,
+        { gasLimit }
       );
 
       logger.info('Token payment transaction submitted', {
@@ -657,16 +678,7 @@ export class BNPLContractInfrastructure {
         accountIdType: typeof accountId
       });
 
-      // Check if the input looks like a DER-encoded public key (starts with 30)
-      if (accountId.startsWith('30') && accountId.length > 60) {
-        logger.error('Received DER-encoded public key instead of account ID', {
-          accountId: accountId.substring(0, 20) + '...',
-          accountIdLength: accountId.length
-        });
-        throw new Error(`Invalid account ID format: received what appears to be a DER-encoded public key instead of a Hedera account ID (format: 0.0.xxxxx)`);
-      }
-
-      // Check if the input looks like a valid Hedera account ID (format: 0.0.xxxxx)
+      // Validate format
       if (!/^\d+\.\d+\.\d+$/.test(accountId)) {
         logger.error('Invalid Hedera account ID format', {
           accountId,
@@ -675,28 +687,15 @@ export class BNPLContractInfrastructure {
         throw new Error(`Invalid account ID format: expected format like '0.0.xxxxx', got '${accountId}'`);
       }
 
-      // Remove any dots and convert to number
-      const accountNumber = accountId.replace(/\./g, '');
-      const accountNum = parseInt(accountNumber, 10);
-      
-      // Validate that the account number is reasonable
-      if (isNaN(accountNum) || accountNum <= 0) {
-        logger.error('Invalid account number after parsing', {
-          accountId,
-          accountNumber,
-          accountNum
-        });
-        throw new Error(`Invalid account number: ${accountNumber}`);
-      }
-      
-      // Convert to EVM address format (20 bytes)
-      const evmAddress = '0x' + accountNum.toString(16).padStart(40, '0');
-      
+      // Use Hedera SDK canonical conversion
+      const solidityAddress = AccountId.fromString(accountId).toSolidityAddress();
+      const evmAddress = '0x' + solidityAddress;
+
       logger.debug('Converted Hedera account to EVM address', {
         accountId,
         evmAddress
       });
-      
+
       return evmAddress;
     } catch (error) {
       logger.error('Error converting Hedera account to EVM address', {
@@ -705,5 +704,14 @@ export class BNPLContractInfrastructure {
       });
       throw new Error(`Failed to convert account ID ${accountId} to EVM address: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Validate that a private key is an ECDSA secp256k1 hex key acceptable by ethers.Wallet
+   */
+  private static isValidEcdsaPrivateKey(key: string): boolean {
+    if (!key) return false;
+    // Must be 0x-prefixed 64-66 hex chars (32 bytes)
+    return /^0x[0-9a-fA-F]{64}$/.test(key);
   }
 }

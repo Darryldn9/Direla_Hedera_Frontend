@@ -11,13 +11,14 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TrendingUp, Shield, Clock, Users, DollarSign, Award, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, ArrowRight, CreditCard, CheckCircle2, XCircle } from 'lucide-react-native';
+import { TrendingUp, Shield, Clock, Users, DollarSign, Award, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, ArrowRight, CreditCard, CheckCircle2, XCircle, History } from 'lucide-react-native';
 import { useAppMode } from '../../contexts/AppContext';
 import { useAccount } from '../../contexts/AccountContext';
 import { useBNPL } from '../../hooks/useBNPL';
 import { BNPLTerms } from '../../types/api';
 import { formatCurrency as formatCurrencyUtil } from '../../utils/currency';
 import PageHeader from '../../components/PageHeader';
+import { api } from '../../services/api';
 
 interface LoanOffer {
   id: string;
@@ -45,6 +46,7 @@ function BNPLTermsSection() {
   const { selectedAccount } = useAccount();
   const { 
     getPendingTermsForMerchant, 
+    getTermsForMerchant,
     acceptTerms, 
     rejectTerms, 
     isLoading, 
@@ -52,7 +54,10 @@ function BNPLTermsSection() {
   } = useBNPL();
   
   const [pendingTerms, setPendingTerms] = useState<BNPLTerms[]>([]);
+  const [historyTerms, setHistoryTerms] = useState<BNPLTerms[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [accountAliasMap, setAccountAliasMap] = useState<Record<string, string>>({});
 
   // Custom alert modal state
   const [showCustomAlert, setShowCustomAlert] = useState(false);
@@ -79,8 +84,32 @@ function BNPLTermsSection() {
     setPendingTerms(terms);
   };
 
+  const loadHistoryTerms = async () => {
+    if (!selectedAccount) return;
+
+    const terms = await getTermsForMerchant(selectedAccount.account_id);
+    setHistoryTerms(terms);
+  };
+
+  const loadAccountAliases = async () => {
+    try {
+      const response = await api.hedera.getActiveAccounts();
+      if (response?.success && response.data) {
+        const map: Record<string, string> = {};
+        response.data.forEach(acc => {
+          if (acc.account_id && acc.alias) {
+            map[acc.account_id] = acc.alias;
+          }
+        });
+        setAccountAliasMap(map);
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     loadPendingTerms();
+    loadHistoryTerms();
+    loadAccountAliases();
   }, [selectedAccount]);
 
   const handleRefresh = async () => {
@@ -207,6 +236,16 @@ function BNPLTermsSection() {
         <CreditCard size={24} color="#0C7C59" />
         <Text style={styles.bnplTitle}>Buy Now Pay Later Terms</Text>
       </View>
+      <View style={styles.bnplLinkContainerLeft}>
+        <TouchableOpacity 
+          style={styles.bnplPlainLink}
+          onPress={() => setShowHistory(prev => !prev)}
+        >
+          <Clock size={16} color="#6B7280" />
+          <Text style={styles.bnplLinkTextMuted}>View Previous Terms</Text>
+          <ArrowRight size={14} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
       
       <Text style={styles.bnplDescription}>
         Manage BNPL terms from customers who want to split their payments into installments.
@@ -277,7 +316,7 @@ function BNPLTermsSection() {
 
                 <View style={styles.customerInfo}>
                   <Text style={styles.customerLabel}>Customer Account:</Text>
-                  <Text style={styles.customerAccount}>{terms.buyerAccountId}</Text>
+                  <Text style={styles.customerAccount}>{accountAliasMap[terms.buyerAccountId] || terms.buyerAccountId}</Text>
                 </View>
               </View>
 
@@ -360,6 +399,38 @@ function BNPLTermsSection() {
           </View>
         </View>
       </Modal>
+
+      {/* Inline History */}
+      {showHistory && (
+        <View style={{ marginTop: 8 }}>
+          <Text style={styles.sectionTitle}>Previous BNPL Terms</Text>
+          {historyTerms.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Clock size={48} color="#8E8E93" />
+              <Text style={styles.emptyTitle}>No Previous Terms</Text>
+              <Text style={styles.emptyDescription}>Accepted, rejected, and expired terms will appear here.</Text>
+            </View>
+          ) : (
+            <View style={styles.historyContainerTight}>
+              <View style={styles.historyList}>
+                {historyTerms.map((t) => (
+                  <View key={t.id} style={styles.historyItem}>
+                    <View style={styles.historyTopRow}>
+                      <Text style={styles.historyAmount}>{formatCurrency(t.totalAmount, t.currency)}</Text>
+                      <Text style={[styles.historyStatus, { color: getStatusColor(t.status) }]}>{t.status}</Text>
+                    </View>
+                    <View style={styles.historyMetaRow}>
+                      <Text style={styles.historyMeta}>Installments: {t.installmentCount}</Text>
+                      <Text style={styles.historyMeta}>Buyer: {accountAliasMap[t.buyerAccountId] || t.buyerAccountId}</Text>
+                    </View>
+                    <Text style={styles.historyDate}>{new Date(t.createdAt).toLocaleString()}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -1354,6 +1425,51 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1C1C1E',
   },
+  bnplLinkContainer: {
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  bnplLinkContainerLeft: {
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  bnplPlainLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bnplLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E8F5E8',
+    borderWidth: 1,
+    borderColor: '#0C7C59',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  bnplLinkButtonMuted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  bnplLinkText: {
+    color: '#0C7C59',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  bnplLinkTextMuted: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   bnplDescription: {
     fontSize: 14,
     color: '#8E8E93',
@@ -1611,5 +1727,71 @@ const styles = StyleSheet.create({
   },
   alertButtonTextDestructive: {
     color: '#FFFFFF',
+  },
+  // History Modal Styles
+  historyOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  historyModal: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  historyList: {
+    gap: 8,
+  },
+  historyContainerTight: {
+    marginHorizontal: -12,
+  },
+  historyItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  historyTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  historyAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0C7C59',
+  },
+  historyStatus: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  historyMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  historyMeta: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  historyDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
 });

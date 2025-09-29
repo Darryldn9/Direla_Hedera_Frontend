@@ -214,7 +214,7 @@ function WalletScreen() {
           <View style={styles.titleRow}>
             <View>
               <Text style={styles.pageTitle}>Wallet</Text>
-              <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
+              <Text style={styles.pageSubtitle}>Your key to transacting digitally</Text>
             </View>
              <View style={styles.buttonRow}>
                <TouchableOpacity
@@ -228,12 +228,12 @@ function WalletScreen() {
                    {balanceLoading ? 'Loading...' : 'Refresh'}
                  </Text>
                </TouchableOpacity>
-               <TouchableOpacity
+               {/* <TouchableOpacity
                  onPress={debugState}
                  style={[styles.refreshButton, { backgroundColor: '#FF6B6B', marginLeft: 8 }]}
                >
                  <Text style={styles.refreshButtonText}>Debug</Text>
-               </TouchableOpacity>
+               </TouchableOpacity> */}
              </View>
           </View>
         </View>
@@ -389,34 +389,6 @@ function WalletScreen() {
           )}
         </View>
 
-        {/* Debug Section - Hedera Transaction History */}
-        {hederaTransactions.length > 0 && (
-          <View style={styles.debugSection}>
-            <Text style={styles.debugTitle}>🔍 Hedera Transaction History (Debug)</Text>
-            <Text style={styles.debugText}>
-              Account: {selectedAccount?.account_id}
-            </Text>
-            <Text style={styles.debugText}>
-              Total Transactions: {hederaTransactions.length}
-            </Text>
-            <Text style={styles.debugText}>
-              Non-HBAR Transactions: {hederaTransactions.filter(t => t.currency !== 'HBAR').length}
-            </Text>
-            <Text style={styles.debugText}>
-              Burn Transactions: {hederaTransactions.filter(t => t.type === 'BURN').length}
-            </Text>
-            <Text style={styles.debugText}>
-              Converted Transactions: {convertedTransactions.length}
-            </Text>
-            <Text style={styles.debugText}>
-              Account Currency: {selectedAccount?.currency || 'HBAR'}
-            </Text>
-            {transactionError && (
-              <Text style={styles.debugError}>Error: {transactionError}</Text>
-            )}
-          </View>
-        )}
-
         <View style={styles.features}>
           <View style={styles.featureItem}>
             <Text style={styles.featureTitle}>Use anywhere Mastercard is accepted</Text>
@@ -424,10 +396,6 @@ function WalletScreen() {
           <View style={styles.featureItem}>
             <Text style={styles.featureEmoji}>⚡</Text>
             <Text style={styles.featureTitle}>Instant top-ups from your Direla balance</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureEmoji}>🔒</Text>
-            <Text style={styles.featureTitle}>Secured by Hedera Hashgraph technology</Text>
           </View>
         </View>
 

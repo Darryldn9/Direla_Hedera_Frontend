@@ -424,6 +424,19 @@ export class BNPLService {
           privateKeyPreview: merchantAccount.private_key?.substring(0, 10) + '...'
         });
 
+        // Ensure we have an ECDSA key for EVM signing. If the stored key is not 0x-hex (likely ED25519),
+        // try fallback to configured HEDERA_EVM_PRIVATE_KEY (Secp256k1) for treasury/merchant signer.
+        let evmSignerPrivateKey = merchantAccount.private_key as string;
+        if (!/^0x[0-9a-fA-F]{64}$/.test(evmSignerPrivateKey || '')) {
+          const fallbackKey = process.env.HEDERA_EVM_PRIVATE_KEY || '';
+          if (!/^0x[0-9a-fA-F]{64}$/.test(fallbackKey)) {
+            logger.error('Merchant key is not ECDSA and no valid HEDERA_EVM_PRIVATE_KEY fallback configured');
+            throw new Error('Merchant account does not have an ECDSA (0x...) private key. Configure HEDERA_EVM_PRIVATE_KEY to sign EVM transactions.');
+          }
+          logger.warn('Using HEDERA_EVM_PRIVATE_KEY fallback for EVM contract interaction');
+          evmSignerPrivateKey = fallbackKey;
+        }
+
         // Get token ID for the currency
         const tokenId = this.getTokenIdForCurrency(currentTerms.currency);
         if (!tokenId) {
@@ -438,7 +451,7 @@ export class BNPLService {
           interestRateBasisPoints,
           currentTerms.installment_count,
           tokenId,
-          merchantAccount.private_key
+          evmSignerPrivateKey
         );
 
         if (!contractResult.success) {
@@ -465,13 +478,52 @@ export class BNPLService {
           transactionId: contractResult.transactionId
         });
 
-        // Update the terms with the smart contract agreement ID
+        // Update the terms with the smart contract transaction ID (stored in agreement_id column)
         await this.supabase
           .from('bnpl_terms')
           .update({ 
-            smart_contract_agreement_id: contractResult.agreementId || null
+            smart_contract_agreement_id: contractResult.transactionId || null
           })
           .eq('id', termsId);
+
+        // Immediately pay the first installment
+        try {
+          const firstInstallmentAmount = currentTerms.installment_amount ||
+            Math.round((currentTerms.total_amount_with_interest / currentTerms.installment_count) * 100) / 100;
+
+          logger.info('Paying first BNPL installment immediately after acceptance', {
+            termsId,
+            agreementIdentifier: contractResult.agreementId || contractResult.transactionId,
+            firstInstallmentAmount,
+            currency: currentTerms.currency
+          });
+
+          const payResult = await this.processInstallmentPayment(
+            (contractResult.agreementId || contractResult.transactionId) as string,
+            currentTerms.buyer_account_id,
+            currentTerms.merchant_account_id,
+            firstInstallmentAmount,
+            currentTerms.currency
+          );
+
+          if (!payResult.success) {
+            logger.warn('First installment payment after acceptance failed', {
+              termsId,
+              error: payResult.error
+            });
+          } else {
+            logger.info('First installment payment after acceptance succeeded', {
+              termsId,
+              transactionId: payResult.transactionId
+            });
+          }
+        } catch (firstPayError) {
+          logger.error('Error paying first BNPL installment after acceptance', {
+            termsId,
+            error: firstPayError instanceof Error ? firstPayError.message : 'Unknown error'
+          });
+          // Do not fail acceptance on first-payment error
+        }
 
         // Log BNPL terms acceptance to HCS
         try {
@@ -658,6 +710,43 @@ export class BNPLService {
       }));
     } catch (error) {
       logger.error('Error getting pending BNPL terms for merchant', { error, merchantAccountId });
+      throw error;
+    }
+  }
+
+  async getTermsForMerchant(merchantAccountId: string): Promise<BNPLTerms[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('bnpl_terms')
+        .select('*')
+        .eq('merchant_account_id', merchantAccountId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        logger.error('Error getting BNPL terms for merchant', { error, merchantAccountId });
+        throw new Error(`Failed to get BNPL terms for merchant: ${error.message}`);
+      }
+
+      return data.map(terms => ({
+        id: terms.id,
+        paymentId: terms.payment_id,
+        buyerAccountId: terms.buyer_account_id,
+        merchantAccountId: terms.merchant_account_id,
+        totalAmount: terms.total_amount,
+        currency: terms.currency,
+        installmentCount: terms.installment_count,
+        installmentAmount: terms.installment_amount,
+        interestRate: terms.interest_rate,
+        totalInterest: terms.total_interest,
+        totalAmountWithInterest: terms.total_amount_with_interest,
+        status: terms.status as BNPLTerms['status'],
+        expiresAt: terms.expires_at,
+        createdAt: terms.created_at,
+        ...(terms.accepted_at && { acceptedAt: terms.accepted_at }),
+        ...(terms.rejected_at && { rejectedAt: terms.rejected_at })
+      }));
+    } catch (error) {
+      logger.error('Error getting BNPL terms for merchant', { error, merchantAccountId });
       throw error;
     }
   }
@@ -904,26 +993,24 @@ export class BNPLService {
    * Process BNPL installment payment with burn/mint operations
    */
   async processInstallmentPayment(
-    agreementId: string,
+    agreementIdOrTxHash: string,
     consumerAccountId: string,
     merchantAccountId: string,
     amount: number,
-    currency: string
+    currency: string,
+    payerCurrency?: string
   ): Promise<{ success: boolean; transactionId?: string | undefined; error?: string }> {
     try {
       logger.info('Processing BNPL installment payment with burn/mint', {
-        agreementId,
+        agreementIdOrTxHash,
         consumerAccountId,
         merchantAccountId,
         amount,
         currency
       });
 
-      // Get token ID for the currency
-      const tokenId = this.getTokenIdForCurrency(currency);
-      if (!tokenId) {
-        throw new Error(`No token ID found for currency: ${currency}`);
-      }
+      // Resolve token IDs for payer and settlement currencies
+      // currency = terms/settlement currency (e.g., USD)
 
       // Get consumer and merchant account details
       const { data: consumerAccount, error: consumerError } = await this.supabase
@@ -946,7 +1033,28 @@ export class BNPLService {
         throw new Error(`Merchant account not found: ${merchantAccountId}`);
       }
 
-      // Get treasury account (platform account)
+      // Resolve numeric agreementId if input is a tx hash (do this early for logging)
+      let agreementId: string = agreementIdOrTxHash;
+      if (/^0x[0-9a-fA-F]{64}$/.test(agreementIdOrTxHash)) {
+        const resolved = await this.bnplContract.getAgreementIdFromTxHash(agreementIdOrTxHash);
+        if (resolved) {
+          agreementId = resolved;
+        }
+      }
+
+      // Determine currencies
+      const consumerCurrency = (payerCurrency || consumerAccount.currency || '').toUpperCase() || currency.toUpperCase();
+      const settlementCurrency = currency.toUpperCase();
+
+      // Token IDs for burn (payer) and mint (settlement)
+      const burnTokenId = this.getTokenIdForCurrency(consumerCurrency);
+      const mintTokenId = this.getTokenIdForCurrency(settlementCurrency);
+
+      if (!mintTokenId) {
+        throw new Error(`No token ID found for settlement currency: ${settlementCurrency}`);
+      }
+
+      // Prepare treasury account (platform account)
       const treasuryAccountId = process.env.HEDERA_ACCOUNT_ID;
       const treasuryPrivateKey = process.env.HEDERA_PRIVATE_KEY;
       
@@ -954,54 +1062,167 @@ export class BNPLService {
         throw new Error('Treasury account not configured');
       }
 
-      // Convert amount to base units (multiply by 100 for 2 decimal places)
-      const amountInBaseUnits = Math.round(amount * 100);
+      // Convert requested amount (in settlement currency) to payer currency if needed
+      let burnAmount = amount; // numeric amount in payer currency
+      if (consumerCurrency !== settlementCurrency) {
+        logger.info('Currencies differ; generating quote to charge payer in their currency', {
+          agreementId,
+          fromCurrency: settlementCurrency,
+          toCurrency: consumerCurrency,
+          amount
+        });
 
-      // Burn tokens from consumer
+        const quote = await this.externalApi.generateCurrencyQuote({
+          fromCurrency: settlementCurrency,
+          toCurrency: consumerCurrency,
+          amount
+        });
+
+        // Use quoted toAmount as the payer charge in their currency
+        burnAmount = quote.toAmount;
+
+        logger.info('Currency quote resolved for payer charge', {
+          agreementId,
+          exchangeRate: quote.exchangeRate,
+          payerCurrency: consumerCurrency,
+          burnAmount
+        });
+      }
+
+      // Convert amounts to base units (2 decimals)
+      const mintAmountInBaseUnits = Math.round(amount * 100); // settlement currency amount
+      const burnAmountInBaseUnits = Math.round(burnAmount * 100); // payer currency amount
+
+      // Ensure token association for consumer before burn
+      try {
+        logger.info('Ensuring consumer is associated to burn token', {
+          accountId: consumerAccountId,
+          tokenId: burnTokenId
+        });
+        await this.hederaInfra.associateToken(
+          consumerAccountId,
+          burnTokenId!,
+          consumerAccount.private_key
+        );
+      } catch (assocErr) {
+        logger.warn('Consumer token association attempt finished (ignoring if already associated)', {
+          accountId: consumerAccountId,
+          tokenId: burnTokenId,
+          error: assocErr instanceof Error ? assocErr.message : 'Unknown error'
+        });
+      }
+
+      // Burn from consumer in payer currency (if tokenized; if HBAR, burnTokenId will be null and we should error)
+      if (!burnTokenId) {
+        throw new Error(`Payer currency ${consumerCurrency} is not tokenized for burn operation`);
+      }
+
       logger.info('Burning tokens from consumer', {
-        tokenId,
-        amount: amountInBaseUnits,
+        tokenId: burnTokenId,
+        amount: burnAmountInBaseUnits,
         consumerAccountId
       });
 
-      const burnResult = await this.hederaInfra.burnToken(
-        tokenId,
-        amountInBaseUnits,
+      // Simple retry/backoff wrapper
+      const retry = async <T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 500): Promise<T> => {
+        let lastErr: any;
+        for (let i = 0; i < attempts; i++) {
+          try {
+            return await fn();
+          } catch (e) {
+            lastErr = e;
+            const delay = baseDelayMs * Math.pow(2, i);
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+        throw lastErr;
+      };
+
+      const burnResult = await retry(() => this.hederaInfra.burnToken(
+        burnTokenId!,
+        burnAmountInBaseUnits,
         consumerAccountId,
-        this.getSupplyKeyForCurrency(currency),
+        this.getSupplyKeyForCurrency(consumerCurrency),
         consumerAccount.private_key
-      );
+      ));
 
       if (burnResult.status !== 'SUCCESS') {
         throw new Error(`Token burn failed: ${burnResult.message}`);
       }
 
-      // Mint tokens to merchant
+      // Mint to merchant in settlement currency (terms currency)
       logger.info('Minting tokens to merchant', {
-        tokenId,
-        amount: amountInBaseUnits,
+        tokenId: mintTokenId,
+        amount: mintAmountInBaseUnits,
         merchantAccountId
       });
 
-      const mintResult = await this.hederaInfra.mintToken(
-        tokenId,
-        amountInBaseUnits,
-        this.getSupplyKeyForCurrency(currency),
+      // Ensure token association for merchant before mint
+      try {
+        logger.info('Ensuring merchant is associated to mint token', {
+          accountId: merchantAccountId,
+          tokenId: mintTokenId
+        });
+        await this.hederaInfra.associateToken(
+          merchantAccountId,
+          mintTokenId!,
+          merchantAccount.private_key
+        );
+      } catch (assocErr) {
+        logger.warn('Merchant token association attempt finished (ignoring if already associated)', {
+          accountId: merchantAccountId,
+          tokenId: mintTokenId,
+          error: assocErr instanceof Error ? assocErr.message : 'Unknown error'
+        });
+      }
+
+      const mintResult = await retry(() => this.hederaInfra.mintToken(
+        mintTokenId!,
+        mintAmountInBaseUnits,
+        this.getSupplyKeyForCurrency(settlementCurrency),
         merchantAccountId
-      );
+      ));
 
       if (mintResult.status !== 'SUCCESS') {
         throw new Error(`Token mint failed: ${mintResult.message}`);
       }
 
+      // Determine treasury EVM signer private key (processTokenPayment requires msg.sender == treasury)
+      const treasuryEvmPrivateKey = (process.env.TREASURY_EVM_PRIVATE_KEY || process.env.HEDERA_EVM_PRIVATE_KEY || '').trim();
+      if (!/^0x[0-9a-fA-F]{64}$/.test(treasuryEvmPrivateKey)) {
+        throw new Error('Treasury EVM private key not configured or invalid. Set TREASURY_EVM_PRIVATE_KEY (0x... secp256k1)');
+      }
+
+      // agreementId already resolved earlier
+
+      // Convert Hedera account IDs to EVM addresses for contract call
+      const consumerEvm = BNPLContractInfrastructure.convertHederaAccountToEVMAddress(consumerAccountId);
+      const merchantEvm = BNPLContractInfrastructure.convertHederaAccountToEVMAddress(merchantAccountId);
+
+      // Preflight: read on-chain agreement and validate actors/token before writing
+      const agreement = await this.bnplContract.getAgreement(agreementId);
+      if (!agreement) {
+        throw new Error('Agreement not found on-chain');
+      }
+      if (agreement.isCompleted) {
+        throw new Error('Agreement already completed');
+      }
+      if (agreement.consumer.toLowerCase() !== consumerEvm.toLowerCase()) {
+        throw new Error('Consumer does not match agreement');
+      }
+      if (agreement.merchant.toLowerCase() !== merchantEvm.toLowerCase()) {
+        throw new Error('Merchant does not match agreement');
+      }
+      const agreementTokenId = agreement.tokenId;
+
       // Update the smart contract to record the payment
       const contractResult = await this.bnplContract.processTokenPayment(
         agreementId,
-        consumerAccountId,
-        merchantAccountId,
-        amountInBaseUnits.toString(),
-        tokenId,
-        treasuryPrivateKey
+        consumerEvm,
+        merchantEvm,
+        mintAmountInBaseUnits.toString(),
+        agreementTokenId,
+        treasuryEvmPrivateKey
       );
 
       if (!contractResult.success) {
@@ -1011,7 +1232,7 @@ export class BNPLService {
       logger.info('BNPL installment payment processed successfully', {
         agreementId,
         amount,
-        currency,
+        currency: settlementCurrency,
         burnTransactionId: burnResult.transactionId,
         mintTransactionId: mintResult.transactionId,
         contractTransactionId: contractResult.transactionId
@@ -1023,8 +1244,9 @@ export class BNPLService {
       };
 
     } catch (error) {
+      const aid = (typeof agreementIdOrTxHash === 'string') ? agreementIdOrTxHash : '';
       logger.error('Failed to process BNPL installment payment', {
-        agreementId,
+        agreementIdOrTxHash: aid,
         consumerAccountId,
         merchantAccountId,
         amount,

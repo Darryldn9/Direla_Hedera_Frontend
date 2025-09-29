@@ -150,6 +150,24 @@ export class BNPLService extends BaseApiService {
     }
   }
 
+  // Get all BNPL terms for merchant (history)
+  async getTermsForMerchant(merchantAccountId: string): Promise<BNPLTerms[]> {
+    try {
+      const response = await this.get<BNPLTerms[]>(
+        API_ENDPOINTS.BNPL_MERCHANT_TERMS(merchantAccountId)
+      );
+      
+      if (response?.success && response.data) {
+        return response.data;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error getting BNPL terms for merchant:', error);
+      throw error;
+    }
+  }
+
   // Get BNPL terms for buyer
   async getTermsForBuyer(buyerAccountId: string): Promise<BNPLTerms[]> {
     try {

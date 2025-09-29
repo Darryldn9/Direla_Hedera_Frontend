@@ -28,6 +28,7 @@ export interface UseBNPLReturn {
   acceptTerms: (termsId: string, accountId: string) => Promise<boolean>;
   rejectTerms: (termsId: string, accountId: string, reason?: string) => Promise<boolean>;
   getPendingTermsForMerchant: (merchantAccountId: string) => Promise<BNPLTerms[]>;
+  getTermsForMerchant: (merchantAccountId: string) => Promise<BNPLTerms[]>;
   getTermsForBuyer: (buyerAccountId: string) => Promise<BNPLTerms[]>;
   
   // Currency conversion
@@ -172,6 +173,8 @@ export function useBNPL(): UseBNPLReturn {
     setIsLoading(true);
     setError(null);
 
+    console.log('[useBNPL] Getting pending terms for merchant:', merchantAccountId);
+
     try {
       const terms = await api.bnpl.getPendingTermsForMerchant(merchantAccountId);
       return terms;
@@ -179,6 +182,25 @@ export function useBNPL(): UseBNPLReturn {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
       console.error('Error getting pending BNPL terms:', err);
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const getTermsForMerchant = useCallback(async (merchantAccountId: string): Promise<BNPLTerms[]> => {
+    setIsLoading(true);
+    setError(null);
+
+    console.log('[useBNPL] Getting terms for merchant:', merchantAccountId);
+
+    try {
+      const terms = await api.bnpl.getTermsForMerchant(merchantAccountId);
+      return terms;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
+      console.error('Error getting BNPL terms for merchant:', err);
       return [];
     } finally {
       setIsLoading(false);
@@ -257,6 +279,7 @@ export function useBNPL(): UseBNPLReturn {
     acceptTerms,
     rejectTerms,
     getPendingTermsForMerchant,
+    getTermsForMerchant,
     getTermsForBuyer,
     generateQuote,
     convertTermsToBuyerCurrency,

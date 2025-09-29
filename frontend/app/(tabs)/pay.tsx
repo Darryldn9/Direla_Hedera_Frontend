@@ -47,6 +47,8 @@ import {
   XCircle,
   RefreshCw,
 } from 'lucide-react-native';
+import { useKYC } from '@/hooks/useKYC';
+import { api } from '../../services/api';
 
 interface QuickContact {
   id: string;
@@ -129,6 +131,9 @@ export default function PayScreen() {
     exchangeRate: number;
   }>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
+  const [accountAliasMap, setAccountAliasMap] = useState<Record<string, string>>({});
+
+  const { kycData } = useKYC();
 
   // Initialize the polling hook for receive payments
   const poller = usePaymentPollingWithToast(
@@ -201,10 +206,29 @@ export default function PayScreen() {
     }
   };
 
+  // Load aliases for accounts to display merchant alias instead of raw ID
+  const loadAccountAliases = async () => {
+    try {
+      const response = await api.hedera.getActiveAccounts();
+      if (response?.success && response.data) {
+        const map: Record<string, string> = {};
+        response.data.forEach((acc: any) => {
+          if (acc.account_id && acc.alias) {
+            map[acc.account_id] = acc.alias;
+          }
+        });
+        setAccountAliasMap(map);
+      }
+    } catch (e) {
+      // Silent fail; keep IDs if aliases unavailable
+    }
+  };
+
   // Load BNPL offers when account changes or tab is switched to BNPL
   useEffect(() => {
     if (activeTab === 'bnpl' && selectedAccount) {
       loadBNPLOffers();
+      loadAccountAliases();
     }
   }, [activeTab, selectedAccount]);
 
@@ -381,7 +405,7 @@ export default function PayScreen() {
     }
   
     const paymentAmount = parseFloat(amount);
-    const merchantName = mode === 'business' ? businessName : personalName;
+    const merchantName = kycData?.first_name + " " + kycData?.last_name;
     const accountAlias = selectedAccount.alias || `Account ${selectedAccount.account_id}`;
     
     // Clean, professional message format (same as sendWhatsAppToContact)
@@ -440,7 +464,7 @@ export default function PayScreen() {
     }
   
     const paymentAmount = parseFloat(amount);
-    const merchantName = mode === 'business' ? businessName : personalName;
+    const merchantName = kycData?.first_name + " " + kycData?.last_name;
     const accountAlias = selectedAccount.alias || `Account ${selectedAccount.account_id}`;
     
     // Clean, professional message format (same as generateWhatsAppPaymentLink)
@@ -480,7 +504,7 @@ export default function PayScreen() {
     }
   
     const paymentAmount = parseFloat(amount);
-    const merchantName = mode === 'business' ? businessName : personalName;
+    const merchantName = kycData?.first_name + " " + kycData?.last_name;
     const accountAlias = selectedAccount.alias || `Account ${selectedAccount.account_id}`;
   
     // Clean format for copying (same as WhatsApp messages)
@@ -1254,7 +1278,7 @@ export default function PayScreen() {
                               <Text style={[styles.amountValue, styles.totalAmount]}>
                                 ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalAmountWithInterest, convertedOffers.get(offer.id)!.currency)}
                               </Text>
-                              <Text style={[styles.originalAmount, styles.totalAmount]}>
+                              <Text style={styles.originalAmount}>
                                 {formatCurrency(offer.totalAmountWithInterest, offer.currency)}
                               </Text>
                             </>
@@ -1289,8 +1313,8 @@ export default function PayScreen() {
                       </View>
 
                       <View style={styles.bnplMerchantInfo}>
-                        <Text style={styles.merchantLabel}>Merchant Account:</Text>
-                        <Text style={styles.merchantAccount}>{offer.merchantAccountId}</Text>
+                        <Text style={styles.merchantLabel}>Merchant:</Text>
+                        <Text style={styles.merchantAccount}>{accountAliasMap[offer.merchantAccountId] || offer.merchantAccountId}</Text>
                       </View>
 
                       <View style={styles.paymentInfo}>
@@ -1322,14 +1346,6 @@ export default function PayScreen() {
             )}
           </ScrollView>
         )}
-
-        {/* Hedera Info */}
-        <View style={styles.hederaInfo}>
-          <Text style={styles.infoTitle}>⚡ Hedera Hashgraph</Text>
-          <Text style={styles.infoText}>
-            Payments are processed on Hedera's enterprise-grade hashgraph network, ensuring ultra-fast settlement (3-5 seconds), predictable low fees, and carbon-negative transactions.
-          </Text>
-        </View>
       </ScrollView>
 
       {/* QR Code Modal for Receive Payments */}
@@ -2016,8 +2032,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   originalAmount: {
-    fontSize: 12,
-    color: '#8E8E93',
+    fontSize: 11,
+    color: '#A1A1AA',
     marginTop: 2,
   },
   totalAmount: {
