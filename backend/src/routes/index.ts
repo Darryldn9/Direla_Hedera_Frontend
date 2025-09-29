@@ -10,6 +10,7 @@ import { AuthService } from '../services/auth.service.js';
 import { MetricsRoutes } from './metrics.routes.js';
 import whatsappRoutes from './whatsapp.routes.js'; // Import the WhatsApp routes
 import bnplRoutes from './bnpl.routes.js'; // Import the BNPL routes
+import notificationsRoutes from './notifications.routes.js';
 
 export class Routes {
   private router: Router;
@@ -77,6 +78,7 @@ export class Routes {
     this.router.use('/diagnostics', diagnosticsRoutes);
     this.router.use('/whatsapp', whatsappRoutes); // Use the WhatsApp routes
     this.router.use('/bnpl', bnplRoutes); // Use the BNPL routes
+    this.router.use('/notifications', notificationsRoutes);
 
     // 404 handler
     this.router.use('*', (req, res) => {

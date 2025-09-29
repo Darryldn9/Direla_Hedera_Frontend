@@ -253,6 +253,51 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          archived_at: string | null
+          body: string
+          channel: Database["public"]["Enums"]["notification_channel"]
+          created_at: string
+          id: string
+          metadata: Json | null
+          priority: Database["public"]["Enums"]["notification_priority"]
+          read_at: string | null
+          related_bnpl_terms_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          body: string
+          channel?: Database["public"]["Enums"]["notification_channel"]
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          priority?: Database["public"]["Enums"]["notification_priority"]
+          read_at?: string | null
+          related_bnpl_terms_id?: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          body?: string
+          channel?: Database["public"]["Enums"]["notification_channel"]
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          priority?: Database["public"]["Enums"]["notification_priority"]
+          read_at?: string | null
+          related_bnpl_terms_id?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_quotes: {
         Row: {
           created_at: string | null
@@ -374,7 +419,13 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_user_unread_notifications: {
+        Row: {
+          unread_count: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       mark_expired_quotes: {
@@ -383,7 +434,13 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      notification_channel: "IN_APP" | "WHATSAPP"
+      notification_priority: "LOW" | "NORMAL" | "HIGH" | "CRITICAL"
+      notification_type:
+        | "BNPL_DEFAULT"
+        | "BNPL_PAYMENT_DUE"
+        | "BNPL_PAYMENT_POSTED"
+        | "SYSTEM"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -510,6 +567,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      notification_channel: ["IN_APP", "WHATSAPP"],
+      notification_priority: ["LOW", "NORMAL", "HIGH", "CRITICAL"],
+      notification_type: [
+        "BNPL_DEFAULT",
+        "BNPL_PAYMENT_DUE",
+        "BNPL_PAYMENT_POSTED",
+        "SYSTEM",
+      ],
+    },
   },
 } as const

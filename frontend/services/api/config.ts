@@ -7,7 +7,7 @@ export const defaultApiConfig: ApiConfig = {
   retryAttempts: 3,
 };
 
-const MY_IP = "196.47.224.194"; // Replace with your actual IP address
+const MY_IP = "192.168.0.100"; // Replace with your actual IP address
 
 // Environment-based configuration
 export const getApiConfig = (): ApiConfig => {
@@ -80,4 +80,10 @@ export const API_ENDPOINTS = {
   BNPL_BUYER_TERMS: (accountId: string) => `/bnpl/buyer/${accountId}`,
   BNPL_QUOTE: '/bnpl/quote',
   BNPL_TERMS_CONVERT: (termsId: string) => `/bnpl/terms/${termsId}/convert`,
+
+  // Notifications
+  NOTIFICATIONS_LIST: (userId: string) => `/notifications/${userId}`,
+  NOTIFICATIONS_UNREAD_COUNT: (userId: string) => `/notifications/${userId}/unread/count`,
+  NOTIFICATIONS_MARK_READ: (notificationId: string) => `/notifications/${notificationId}/read`,
+  NOTIFICATIONS_ARCHIVE: (notificationId: string) => `/notifications/${notificationId}/archive`,
 } as const;

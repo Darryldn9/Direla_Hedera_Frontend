@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useAppMode } from '../contexts/AppContext';
+import { Bell } from 'lucide-react-native';
+import NotificationModal from './NotificationModal';
 
 interface PageHeaderProps {
   // Optional props to override default values
@@ -17,6 +19,7 @@ export default function PageHeader({
   businessInitials = "MT"
 }: PageHeaderProps) {
   const { mode } = useAppMode();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   return (
     <View style={styles.header}>
@@ -30,6 +33,10 @@ export default function PageHeader({
           {mode === 'business' ? businessName : personalName}
         </Text>
       </View>
+      <TouchableOpacity onPress={() => setShowNotifications(true)} style={styles.bellButton}>
+        <Bell size={22} color="#1C1C1E" />
+      </TouchableOpacity>
+      <NotificationModal visible={showNotifications} onClose={() => setShowNotifications(false)} />
     </View>
   );
 }
@@ -62,6 +69,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+  },
+  bellButton: {
+    marginLeft: 12,
+    padding: 6,
+    borderRadius: 16,
   },
   businessBadgeText: {
     fontSize: 14,

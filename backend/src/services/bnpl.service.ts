@@ -8,6 +8,7 @@ import { ExternalApiInfrastructure } from '../infrastructure/external-api';
 import { BNPLContractInfrastructure } from '../infrastructure/bnpl-contract';
 import { HederaInfrastructure } from '../infrastructure/hedera';
 import { ethers } from 'ethers';
+import { NotificationsService } from './notifications.service';
 
 export class BNPLService {
   private supabase = getSupabaseClient();
@@ -15,6 +16,7 @@ export class BNPLService {
   private bnplContract = new BNPLContractInfrastructure();
   private hederaInfra: HederaInfrastructure;
   private readonly PLATFORM_ISSUER = 'did:hedera:testnet:platform-0.0.9999';
+  private notifications: NotificationsService;
 
   constructor() {
     // Initialize Hedera infrastructure for HCS logging
@@ -29,6 +31,7 @@ export class BNPLService {
       evmRpcUrl: process.env.HEDERA_EVM_RPC_URL || 'https://testnet.hashio.io/api',
       bnplContractAddress: process.env.BNPL_ADDRESS || ''
     });
+    this.notifications = new NotificationsService();
   }
 
   /**
@@ -1238,6 +1241,71 @@ export class BNPLService {
         contractTransactionId: contractResult.transactionId
       });
 
+      // Create notifications for buyer and merchant (best-effort, non-blocking)
+      try {
+        // Fetch user IDs for buyer and merchant from hedera_accounts
+        const [{ data: buyerAccountRow }, { data: merchantAccountRow }] = await Promise.all([
+          this.supabase
+            .from('hedera_accounts')
+            .select('user_id, alias, whatsapp_phone')
+            .eq('account_id', consumerAccountId)
+            .single(),
+          this.supabase
+            .from('hedera_accounts')
+            .select('user_id, alias, whatsapp_phone')
+            .eq('account_id', merchantAccountId)
+            .single()
+        ]);
+
+        const shortAgreementId = (agreementId.length > 10) ? `${agreementId.substring(0, 6)}…${agreementId.substring(agreementId.length - 4)}` : agreementId;
+        const formattedAmount = `${amount.toFixed(2)} ${settlementCurrency}`;
+
+        // Notify buyer (payer)
+        if (buyerAccountRow?.user_id) {
+          await this.notifications.create({
+            userId: buyerAccountRow.user_id,
+            type: 'BNPL_PAYMENT_POSTED',
+            title: 'Installment paid',
+            body: `You paid ${formattedAmount} for BNPL agreement ${shortAgreementId}${merchantAccountRow?.alias ? ` to ${merchantAccountRow.alias}` : ''}.`,
+            metadata: {
+              agreementId,
+              amount,
+              currency: settlementCurrency,
+              role: 'buyer',
+              merchantAccountId,
+              contractTransactionId: contractResult.transactionId,
+              burnTransactionId: burnResult.transactionId,
+              mintTransactionId: mintResult.transactionId
+            }
+          });
+        }
+
+        // Notify merchant (receiver)
+        if (merchantAccountRow?.user_id) {
+          await this.notifications.create({
+            userId: merchantAccountRow.user_id,
+            type: 'BNPL_PAYMENT_POSTED',
+            title: 'Installment received',
+            body: `You received ${formattedAmount} for BNPL agreement ${shortAgreementId}${buyerAccountRow?.alias ? ` from ${buyerAccountRow.alias}` : ''}.`,
+            metadata: {
+              agreementId,
+              amount,
+              currency: settlementCurrency,
+              role: 'merchant',
+              buyerAccountId: consumerAccountId,
+              contractTransactionId: contractResult.transactionId,
+              burnTransactionId: burnResult.transactionId,
+              mintTransactionId: mintResult.transactionId
+            }
+          });
+        }
+      } catch (notifyErr) {
+        logger.warn('BNPL installment payment notifications failed (non-blocking)', {
+          agreementId,
+          error: notifyErr instanceof Error ? notifyErr.message : 'Unknown error'
+        });
+      }
+
       return {
         success: true,
         transactionId: contractResult.transactionId
@@ -1253,6 +1321,74 @@ export class BNPLService {
         currency,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
+
+      // Best-effort failure notifications to both parties
+      try {
+        // Resolve agreementId if possible for message
+        let agreementIdForMsg: string = aid;
+        if (/^0x[0-9a-fA-F]{64}$/.test(aid)) {
+          const resolved = await this.bnplContract.getAgreementIdFromTxHash(aid);
+          if (resolved) agreementIdForMsg = resolved;
+        }
+        const shortAgreementId = (agreementIdForMsg && agreementIdForMsg.length > 10)
+          ? `${agreementIdForMsg.substring(0, 6)}…${agreementIdForMsg.substring(agreementIdForMsg.length - 4)}`
+          : (agreementIdForMsg || '');
+
+        const [{ data: buyerAccountRow }, { data: merchantAccountRow }] = await Promise.all([
+          this.supabase
+            .from('hedera_accounts')
+            .select('user_id, alias')
+            .eq('account_id', consumerAccountId)
+            .single(),
+          this.supabase
+            .from('hedera_accounts')
+            .select('user_id, alias')
+            .eq('account_id', merchantAccountId)
+            .single()
+        ]);
+
+        const formattedAmount = `${amount.toFixed(2)} ${currency.toUpperCase()}`;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+        if (buyerAccountRow?.user_id) {
+          await this.notifications.create({
+            userId: buyerAccountRow.user_id,
+            type: 'BNPL_DEFAULT',
+            title: 'Installment payment failed',
+            body: `Your attempt to pay ${formattedAmount}${merchantAccountRow?.alias ? ` to ${merchantAccountRow.alias}` : ''} for BNPL ${shortAgreementId} failed: ${errorMsg}.`,
+            metadata: {
+              agreementId: agreementIdForMsg || aid,
+              amount,
+              currency,
+              role: 'buyer',
+              merchantAccountId,
+              error: errorMsg
+            }
+          });
+        }
+
+        if (merchantAccountRow?.user_id) {
+          await this.notifications.create({
+            userId: merchantAccountRow.user_id,
+            type: 'BNPL_DEFAULT',
+            title: 'Installment payment failed',
+            body: `A buyer's installment of ${formattedAmount}${buyerAccountRow?.alias ? ` from ${buyerAccountRow.alias}` : ''} for BNPL ${shortAgreementId} failed: ${errorMsg}.`,
+            metadata: {
+              agreementId: agreementIdForMsg || aid,
+              amount,
+              currency,
+              role: 'merchant',
+              buyerAccountId: consumerAccountId,
+              error: errorMsg
+            }
+          });
+        }
+      } catch (notifyErr) {
+        logger.warn('Failed to send BNPL failure notifications (non-blocking)', {
+          agreementIdOrTxHash: aid,
+          error: notifyErr instanceof Error ? notifyErr.message : 'Unknown error'
+        });
+      }
 
       return {
         success: false,
