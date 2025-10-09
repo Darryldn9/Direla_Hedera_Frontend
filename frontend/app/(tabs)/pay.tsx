@@ -22,8 +22,9 @@ import { usePaymentManager } from '../../hooks/usePayments';
 import { usePaymentPollingWithToast } from '../../hooks/usePaymentPollingWithToast';
 import { useToast } from '../../hooks/useToast';
 import { useQuote } from '../../hooks/useQuote';
+import { useNFC, NFCPaymentData } from '../../hooks/useNFC';
+import { BNPLTerms, CurrencyQuote, ProcessPaymentWithDIDRequest } from '../../types/api';
 import { useBNPL } from '../../hooks/useBNPL';
-import { CurrencyQuote, ProcessPaymentWithDIDRequest, BNPLTerms } from '../../types/api';
 import { formatCurrency as formatCurrencyUtil } from '../../utils/currency';
 import PaymentConfirmationModal from '../../components/PaymentConfirmationModal';
 import BuyNowPayLaterModal from '../../components/BuyNowPayLaterModal';
@@ -118,6 +119,7 @@ export default function PayScreen() {
   const { makePayment } = usePaymentManager();
   const { showSuccess, showError, showInfo } = useToast();
   const { generateQuote, quote, isLoading: isQuoteLoading, error: quoteError } = useQuote();
+  const { isNFCSupported, isNFCEnabled, isScanning, writeNFCTag, cancelNFCScan } = useNFC();
   const { getTermsForBuyer, isLoading: isBNPLLoading, error: bnplError } = useBNPL();
   
   // BNPL offers state
@@ -534,6 +536,53 @@ export default function PayScreen() {
       [
         { text: 'OK' }
       ]
+    );
+  };
+
+  const handleNFCPaymentRequest = () => {
+    console.log('=== NFC Payment Request Started ===');
+    console.log('Selected Account:', selectedAccount);
+    console.log('Amount:', amount);
+    console.log('Receiver Currency:', receiverCurrency);
+    console.log('Sender Currency:', senderCurrency);
+    console.log('NFC Supported:', isNFCSupported);
+    console.log('NFC Enabled:', isNFCEnabled);
+    if (!selectedAccount) {
+      Alert.alert('No Account', 'No payment account selected. Please select an account in settings.');
+      return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount first');
+      return;
+    }
+    const paymentAmount = parseFloat(amount);
+    const nfcPaymentData: NFCPaymentData = {
+      toAccountId: selectedAccount.account_id,
+      amount: paymentAmount,
+      currency: receiverCurrency,
+      accountAlias: selectedAccount.alias || `Account ${selectedAccount.account_id}`,
+      memo: `Payment to ${selectedAccount.alias || selectedAccount.account_id}`,
+      merchant_user_id: currentUser?.user_id,
+      timestamp: new Date().toISOString(),
+      fromCurrency: senderCurrency,
+      toCurrency: receiverCurrency,
+    };
+    console.log('Payment data prepared:', nfcPaymentData);
+    console.log('Calling writeNFCTag...');
+    writeNFCTag(
+      nfcPaymentData,
+      () => {
+        console.log('NFC write successful!');
+        showSuccess(
+          'NFC Tag Written',
+          `Payment request for ${paymentAmount.toFixed(2)} ${receiverCurrency} has been written to the NFC tag.`,
+          5000
+        );
+      },
+      (error: string) => {
+        console.error('NFC write failed:', error);
+        showError('NFC Write Error', error, 5000);
+      }
     );
   };
 
@@ -1170,7 +1219,10 @@ export default function PayScreen() {
                   <ArrowRight size={16} color="#BDC3C7" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.requestMethodButton}>
+                <TouchableOpacity
+                  style={styles.requestMethodButton}
+                  onPress={handleNFCPaymentRequest}
+                >
                   <Nfc size={20} color="#3498DB" />
                   <Text style={styles.requestMethodText}>Request via NFC</Text>
                   <ArrowRight size={16} color="#BDC3C7" />
