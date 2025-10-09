@@ -211,7 +211,7 @@ export default function MerchantScreen() {
         </View>
 
         {/* Inventory Alerts */}
-        <View style={styles.alertsContainer}>
+        {/* <View style={styles.alertsContainer}>
           <View style={styles.alertHeader}>
             <Bell size={20} color="#E67E22" />
             <Text style={styles.alertTitle}>Inventory Alerts</Text>
@@ -226,7 +226,7 @@ export default function MerchantScreen() {
             <FileText size={16} color="#0C7C59" />
             <Text style={styles.manageInventoryText}>Manage Inventory</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Hedera Benefits */}
         <View style={styles.benefitsContainer}>

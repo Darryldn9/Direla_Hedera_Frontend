@@ -15,6 +15,7 @@ import DepositModal from '../../components/DepositModal';
 import SendModal from '../../components/SendModal';
 import RequestModal from '../../components/RequestModal';
 import WithdrawModal from '../../components/WithdrawModal';
+import PageHeader from '../../components/PageHeader';
 
 interface Transaction {
   id: string;
@@ -177,11 +178,6 @@ function WalletScreen() {
     }
   }, [isLoadingTransactions, transactionError]);
 
-  // Mode-aware data
-  const businessName = "Mama Thandi's Spaza Shop";
-  const personalName = "Nomsa Khumalo";
-  const userInitials = "NK"; // For consumer mode
-  const businessInitials = "MT"; // For business mode
   
   const cardNumber = '4532 1234 5678 9012';
   const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
@@ -211,23 +207,14 @@ function WalletScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header - Consistent with other pages */}
-        <View style={styles.header}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.avatarText}>{mode === 'business' ? businessInitials : userInitials}</Text>
-          </View>
-          <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>
-              {mode === 'business' ? businessName : personalName}
-            </Text>
-          </View>
-        </View>
+        <PageHeader />
 
         {/* Page Title */}
         <View style={styles.titleContainer}>
           <View style={styles.titleRow}>
             <View>
               <Text style={styles.pageTitle}>Wallet</Text>
-              <Text style={styles.pageSubtitle}>Your digital wallet powered by Hedera</Text>
+              <Text style={styles.pageSubtitle}>Your key to transacting digitally</Text>
             </View>
              <View style={styles.buttonRow}>
                <TouchableOpacity
@@ -241,12 +228,12 @@ function WalletScreen() {
                    {balanceLoading ? 'Loading...' : 'Refresh'}
                  </Text>
                </TouchableOpacity>
-               <TouchableOpacity
+               {/* <TouchableOpacity
                  onPress={debugState}
                  style={[styles.refreshButton, { backgroundColor: '#FF6B6B', marginLeft: 8 }]}
                >
                  <Text style={styles.refreshButtonText}>Debug</Text>
-               </TouchableOpacity>
+               </TouchableOpacity> */}
              </View>
           </View>
         </View>
@@ -367,7 +354,7 @@ function WalletScreen() {
               };
 
               return (
-                <TouchableOpacity key={transaction.transactionId} style={styles.transactionItem}>
+                <TouchableOpacity key={`tx-${transaction.transactionId}`} style={styles.transactionItem}>
                   <View style={styles.transactionIcon}>
                     {getTransactionIcon(getTransactionIconType())}
                   </View>
@@ -402,34 +389,6 @@ function WalletScreen() {
           )}
         </View>
 
-        {/* Debug Section - Hedera Transaction History */}
-        {hederaTransactions.length > 0 && (
-          <View style={styles.debugSection}>
-            <Text style={styles.debugTitle}>🔍 Hedera Transaction History (Debug)</Text>
-            <Text style={styles.debugText}>
-              Account: {selectedAccount?.account_id}
-            </Text>
-            <Text style={styles.debugText}>
-              Total Transactions: {hederaTransactions.length}
-            </Text>
-            <Text style={styles.debugText}>
-              Non-HBAR Transactions: {hederaTransactions.filter(t => t.currency !== 'HBAR').length}
-            </Text>
-            <Text style={styles.debugText}>
-              Burn Transactions: {hederaTransactions.filter(t => t.type === 'BURN').length}
-            </Text>
-            <Text style={styles.debugText}>
-              Converted Transactions: {convertedTransactions.length}
-            </Text>
-            <Text style={styles.debugText}>
-              Account Currency: {selectedAccount?.currency || 'HBAR'}
-            </Text>
-            {transactionError && (
-              <Text style={styles.debugError}>Error: {transactionError}</Text>
-            )}
-          </View>
-        )}
-
         <View style={styles.features}>
           <View style={styles.featureItem}>
             <Text style={styles.featureTitle}>Use anywhere Mastercard is accepted</Text>
@@ -437,10 +396,6 @@ function WalletScreen() {
           <View style={styles.featureItem}>
             <Text style={styles.featureEmoji}>⚡</Text>
             <Text style={styles.featureTitle}>Instant top-ups from your Direla balance</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureEmoji}>🔒</Text>
-            <Text style={styles.featureTitle}>Secured by Hedera Hashgraph technology</Text>
           </View>
         </View>
 
@@ -508,39 +463,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#F5F5F7',
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0C7C59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  businessBadge: {
-    backgroundColor: '#E8E8EA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  businessBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1C1C1E',
   },
   titleContainer: {
     paddingHorizontal: 20,

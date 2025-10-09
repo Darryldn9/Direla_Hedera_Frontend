@@ -18,6 +18,7 @@ import {
 } from 'lucide-react-native';
 
 import NewSaleModal from '../../components/NewSaleModal';
+import PageHeader from '../../components/PageHeader';
 import { useAccount } from '../../contexts/AccountContext';
 import { useMetrics } from '../../hooks/useMetrics';
 
@@ -28,11 +29,7 @@ export default function HubScreen() {
   const accountId = selectedAccount?.account_id || null;
   const { dailyRevenue, monthlySummary, series, loading, error, refresh } = useMetrics(accountId);
   
-  // Sample business data (will be updated by sales)
-  const businessName = "Mama Thandi's Spaza Shop";
-  const userInitials = "MT";
   const todaysRevenue = dailyRevenue?.revenue ?? 0;
-  const inventoryAlerts = 3;
   const monthlySales = monthlySummary?.count ?? 0;
   const isOnline = true;
 
@@ -57,14 +54,7 @@ export default function HubScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.avatarText}>{userInitials}</Text>
-          </View>
-          <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>{businessName}</Text>
-          </View>
-        </View>
+        <PageHeader />
 
         {/* Page Title */}
         <View style={styles.titleContainer}>
@@ -89,14 +79,14 @@ export default function HubScreen() {
               <Text style={styles.cardSubtext}>Daily earnings</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               style={[styles.card, styles.alertsCard]}
               onPress={() => handleCardPress("Inventory Alerts")}
             >
               <Text style={styles.cardTitle}>Inventory Alerts</Text>
               <Text style={styles.largeNumber}>{inventoryAlerts}</Text>
               <Text style={styles.cardSubtext}>alerts</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Middle Row - Summary and Business Status */}
@@ -170,39 +160,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#F5F5F7',
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0C7C59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  businessBadge: {
-    backgroundColor: '#E8E8EA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  businessBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1C1C1E',
   },
   titleContainer: {
     paddingHorizontal: 20,

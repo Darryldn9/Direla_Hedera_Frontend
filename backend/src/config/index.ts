@@ -15,7 +15,9 @@ export const config = {
     usdTokenId: process.env.USD_TOKEN_ID || '',
     usdSupplyKey: process.env.USD_SUPPLY_KEY || '',
     zarTokenId: process.env.ZAR_TOKEN_ID || '',
-    zarSupplyKey: process.env.ZAR_SUPPLY_KEY || ''
+    zarSupplyKey: process.env.ZAR_SUPPLY_KEY || '',
+    evmRpcUrl: process.env.HEDERA_EVM_RPC_URL || 'https://testnet.hashio.io/api',
+    bnplContractAddress: process.env.BNPL_ADDRESS || ''
   } as HederaConfig,
   
   mirrorNode: {
@@ -40,6 +42,15 @@ export const config = {
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
     ttlSeconds: parseInt(process.env.REDIS_TTL_SECONDS || '30')
+  }
+  ,
+  bnpl: {
+    // EVM contract address for the BNPL contract (optional)
+    address: process.env.BNPL_ADDRESS || '',
+    // RPC URL for connecting to the EVM (e.g. Hedera EVM gateway)
+    rpcUrl: process.env.BNPL_RPC_URL || process.env.EVM_RPC_URL || 'https://testnet.hashio.io/api',
+    // Private key used by backend to sign BNPL transactions (optional)
+    privateKey: process.env.BNPL_PRIVATE_KEY || process.env.PRIVATE_KEY || ''
   }
 };
 

@@ -33,7 +33,7 @@ export interface HederaAccount {
   created_at: string;
   updated_at: string;
   user_id: string; // UUID foreign key to users.user_id
-  preferred_currency: string; // User's preferred currency (e.g., 'USD', 'EUR', 'HBAR')
+  currency: string; // User's preferred currency (e.g., 'USD', 'EUR', 'HBAR')
 }
 
 export interface CreateHederaAccountRequest {
@@ -67,6 +67,8 @@ export interface HederaConfig {
   usdSupplyKey?: string;
   zarTokenId?: string;
   zarSupplyKey?: string;
+  evmRpcUrl?: string;
+  bnplContractAddress?: string;
 }
 
 export interface HederaTransactionResult {
@@ -187,6 +189,13 @@ export interface ExternalApiService {
   notifyService(request: ExternalNotificationRequest): Promise<ExternalNotificationResponse>;
 }
 
+export interface KYCService {
+  createKYC(data: CreateKYCRequest): Promise<KYCData>;
+  getKYCByUserId(userId: string): Promise<KYCData | null>;
+  updateKYC(userId: string, data: UpdateKYCRequest): Promise<KYCData | null>;
+  deleteKYC(userId: string): Promise<boolean>;
+}
+
 // Currency conversion types
 export interface CurrencyConversionRequest {
   fromCurrency: string;
@@ -243,4 +252,180 @@ export interface HCSMessageResult {
   transactionId?: string;
   explorerLink?: string;
   error?: string;
+}
+
+// BNPL Types
+export interface BNPLTerms {
+  id: string;
+  paymentId: string;
+  buyerAccountId: string;
+  merchantAccountId: string;
+  totalAmount: number;
+  currency: string;
+  installmentCount: number;
+  installmentAmount: number;
+  interestRate: number; // Percentage (e.g., 5 for 5%)
+  totalInterest: number;
+  totalAmountWithInterest: number;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | 'COMPLETED';
+  expiresAt: number; // Unix timestamp
+  createdAt: number; // Unix timestamp
+  acceptedAt?: number; // Unix timestamp
+  rejectedAt?: number; // Unix timestamp
+  smartContractAgreementId?: string; // Smart contract agreement ID
+}
+
+// BNPL HCS Event Types
+export interface BNPLTermsCreatedEvent {
+  event: 'bnpl_terms_created';
+  terms_id: string;
+  payment_id: string;
+  buyer_account_id: string;
+  merchant_account_id: string;
+  total_amount: number;
+  currency: string;
+  installment_count: number;
+  interest_rate: number;
+  status: string;
+  expires_at: number;
+  created_at: number;
+  timestamp: string;
+  platform_issuer: string;
+}
+
+export interface BNPLTermsAcceptedEvent {
+  event: 'bnpl_terms_accepted';
+  terms_id: string;
+  payment_id: string;
+  buyer_account_id: string;
+  merchant_account_id: string;
+  smart_contract_agreement_id?: string;
+  transaction_id?: string;
+  accepted_at: number;
+  timestamp: string;
+  platform_issuer: string;
+}
+
+export interface BNPLTermsRejectedEvent {
+  event: 'bnpl_terms_rejected';
+  terms_id: string;
+  payment_id: string;
+  buyer_account_id: string;
+  merchant_account_id: string;
+  rejection_reason?: string;
+  rejected_at: number;
+  timestamp: string;
+  platform_issuer: string;
+}
+
+export interface CreateBNPLTermsRequest {
+  paymentId: string;
+  buyerAccountId: string;
+  merchantAccountId: string;
+  totalAmount: number;
+  currency: string;
+  installmentCount: number;
+  interestRate: number;
+  expiresInMinutes?: number; // Default 30 minutes
+}
+
+export interface CreateBNPLTermsResponse {
+  terms: BNPLTerms;
+  success: boolean;
+  message?: string;
+}
+
+export interface GetBNPLTermsRequest {
+  paymentId: string;
+  accountId: string;
+}
+
+export interface GetBNPLTermsResponse {
+  terms: BNPLTerms | null;
+  success: boolean;
+  message?: string;
+}
+
+export interface AcceptBNPLTermsRequest {
+  termsId: string;
+  accountId: string;
+}
+
+export interface AcceptBNPLTermsResponse {
+  success: boolean;
+  message?: string;
+  transactionId?: string;
+}
+
+export interface RejectBNPLTermsRequest {
+  termsId: string;
+  accountId: string;
+  reason?: string;
+}
+
+export interface RejectBNPLTermsResponse {
+  success: boolean;
+  message?: string;
+}
+
+// WebSocket Types
+export interface BNPLWebSocketMessage {
+  type: 'TERMS_OFFERED' | 'TERMS_ACCEPTED' | 'TERMS_REJECTED' | 'TERMS_EXPIRED';
+  data: BNPLTerms;
+  timestamp: number;
+}
+
+// KYC Types
+export interface KYCData {
+  id: number;
+  user_id: string;
+  address: string | null;
+  date_of_birth: string | null;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  id_number: string | null;
+  occupation: string | null;
+  phone: string | null;
+}
+
+export interface CreateKYCRequest {
+  user_id: string;
+  address?: string | null;
+  date_of_birth?: string | null;
+  email?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  id_number?: string | null;
+  occupation?: string | null;
+  phone?: string | null;
+}
+
+export interface UpdateKYCRequest {
+  address?: string | null;
+  date_of_birth?: string | null;
+  email?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  id_number?: string | null;
+  occupation?: string | null;
+  phone?: string | null;
+}
+
+export interface GetKYCResponse {
+  kyc: KYCData | null;
+  success: boolean;
+  message?: string;
+}
+
+export interface CreateKYCResponse {
+  kyc: KYCData;
+  success: boolean;
+  message?: string;
+}
+
+export interface UpdateKYCResponse {
+  kyc: KYCData;
+  success: boolean;
+  message?: string;
 }

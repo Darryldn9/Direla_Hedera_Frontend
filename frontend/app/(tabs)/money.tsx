@@ -14,13 +14,11 @@ import {
   Calendar,
   DollarSign
 } from 'lucide-react-native';
+import PageHeader from '../../components/PageHeader';
 
 export default function MoneyScreen() {
   const insets = useSafeAreaInsets();
 
-  // Sample business data
-  const businessName = "Mama Thandi's Spaza Shop";
-  const userInitials = "MT";
   const currentPayoutAmount = 4.34;
   const minimumPayoutAmount = 50.00;
   const isAboveMinimum = currentPayoutAmount >= minimumPayoutAmount;
@@ -83,14 +81,7 @@ export default function MoneyScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.avatarText}>{userInitials}</Text>
-          </View>
-          <View style={styles.businessBadge}>
-            <Text style={styles.businessBadgeText}>{businessName}</Text>
-          </View>
-        </View>
+        <PageHeader />
 
         {/* Payout Amount Display */}
         <View style={styles.payoutContainer}>
@@ -202,39 +193,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#F5F5F7',
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0C7C59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  businessBadge: {
-    backgroundColor: '#E8E8EA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  businessBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1C1C1E',
   },
   payoutContainer: {
     alignItems: 'center',
