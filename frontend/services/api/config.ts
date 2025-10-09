@@ -69,4 +69,21 @@ export const API_ENDPOINTS = {
   DID_USERS: '/did/users',
   DID_USER_BY_ID: (userId: string) => `/did/users/${userId}`,
   DID_TRANSACTIONS: '/did/transactions',
+  
+  // BNPL (Buy Now Pay Later)
+  BNPL_TERMS: '/bnpl/terms',
+  BNPL_TERMS_BY_PAYMENT: (paymentId: string, accountId: string) => `/bnpl/terms/${paymentId}/${accountId}`,
+  BNPL_TERMS_ACCEPT: (termsId: string) => `/bnpl/terms/${termsId}/accept`,
+  BNPL_TERMS_REJECT: (termsId: string) => `/bnpl/terms/${termsId}/reject`,
+  BNPL_MERCHANT_PENDING: (accountId: string) => `/bnpl/merchant/${accountId}/pending`,
+  BNPL_MERCHANT_TERMS: (accountId: string) => `/bnpl/merchant/${accountId}`,
+  BNPL_BUYER_TERMS: (accountId: string) => `/bnpl/buyer/${accountId}`,
+  BNPL_QUOTE: '/bnpl/quote',
+  BNPL_TERMS_CONVERT: (termsId: string) => `/bnpl/terms/${termsId}/convert`,
+
+  // Notifications
+  NOTIFICATIONS_LIST: (userId: string) => `/notifications/${userId}`,
+  NOTIFICATIONS_UNREAD_COUNT: (userId: string) => `/notifications/${userId}/unread/count`,
+  NOTIFICATIONS_MARK_READ: (notificationId: string) => `/notifications/${notificationId}/read`,
+  NOTIFICATIONS_ARCHIVE: (notificationId: string) => `/notifications/${notificationId}/archive`,
 } as const;

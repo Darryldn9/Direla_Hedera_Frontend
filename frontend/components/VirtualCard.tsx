@@ -149,8 +149,7 @@ export default function VirtualCard({
               {/* Card Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.logoContainer}>
-                  <Text style={styles.logoText}>Direla</Text>
-                  <Text style={styles.logoSubtext}>Powered by Hedera</Text>
+                  <Text style={styles.logoText}>Direla Wallet</Text>
                 </View>
                 <TouchableOpacity onPress={onToggleBalance} style={styles.eyeButton}>
                   {showBalance ? (

@@ -15,7 +15,9 @@ export const config = {
     usdTokenId: process.env.USD_TOKEN_ID || '',
     usdSupplyKey: process.env.USD_SUPPLY_KEY || '',
     zarTokenId: process.env.ZAR_TOKEN_ID || '',
-    zarSupplyKey: process.env.ZAR_SUPPLY_KEY || ''
+    zarSupplyKey: process.env.ZAR_SUPPLY_KEY || '',
+    evmRpcUrl: process.env.HEDERA_EVM_RPC_URL || 'https://testnet.hashio.io/api',
+    bnplContractAddress: process.env.BNPL_ADDRESS || ''
   } as HederaConfig,
   
   mirrorNode: {

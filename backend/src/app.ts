@@ -14,6 +14,7 @@ import { AuthService } from './services/auth.service.js';
 import { Routes } from './routes/index.js';
 import { DIDRoutes } from './routes/did.routes.js';
 import { TransactionRoutes } from './routes/transaction.routes.js';
+import kycRoutes from './routes/kyc.routes.js';
 import { logger } from './utils/logger.js';
 
 export class App {
@@ -30,7 +31,14 @@ export class App {
   private setupMiddleware(): void {
     // Security middleware
     this.app.use(helmet());
-    this.app.use(cors());
+    
+    // CORS configuration for mobile development
+    this.app.use(cors({
+      origin: true, // Allow all origins in development
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    }));
     
     // Body parsing middleware
     this.app.use(express.json({ limit: '10mb' }));
@@ -93,6 +101,9 @@ export class App {
       
       this.app.use('/api/transactions', transactionRoutes.getRouter());
       logger.debug('Transaction routes mounted at /api/transactions');
+      
+      this.app.use('/api/kyc', kycRoutes);
+      logger.debug('KYC routes mounted at /api/kyc');
       
       this.app.use('/api', routes.getRouter());
       logger.debug('Main routes mounted at /api');

@@ -210,8 +210,8 @@ export class HederaServiceImpl implements HederaService {
       }
 
       // Determine currencies - use quote if available, otherwise account preferences
-      const senderCurrency = fromCurrency || fromAccount.preferred_currency || 'HBAR';
-      const receiverCurrency = toCurrency || toAccount.preferred_currency || 'HBAR';
+      const senderCurrency = fromCurrency || fromAccount.currency || 'HBAR';
+      const receiverCurrency = toCurrency || toAccount.currency || 'HBAR';
 
       logger.info('Currency conversion details', {
         senderCurrency,
@@ -791,8 +791,8 @@ export class HederaServiceImpl implements HederaService {
       }
 
       // Determine currencies - use account preferences if not specified
-      const senderCurrency = fromCurrency || fromAccount.preferred_currency || 'HBAR';
-      const receiverCurrency = toCurrency || toAccount.preferred_currency || 'HBAR';
+      const senderCurrency = fromCurrency || fromAccount.currency || 'HBAR';
+      const receiverCurrency = toCurrency || toAccount.currency || 'HBAR';
 
       // Generate currency quote
       const conversionRequest: CurrencyConversionRequest = {
