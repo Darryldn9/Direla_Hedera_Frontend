@@ -665,11 +665,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
+    paddingBottom: 40, // Add bottom padding to ensure button visibility
   },
   amountDisplay: {
     alignItems: 'center',
     paddingVertical: 20,
-    marginBottom: 30,
   },
   amountRow: {
     flexDirection: 'row',
@@ -736,7 +736,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 20,
+    marginTop: 'auto', // Push button to bottom
+    marginBottom: 0, // Remove bottom margin since we have paddingBottom on container
   },
   continueButtonText: {
     fontSize: 18,
@@ -748,6 +749,7 @@ const styles = StyleSheet.create({
   paymentStep: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingBottom: 40, // Add bottom padding to ensure button visibility
   },
   paymentAmountDisplay: {
     alignItems: 'center',
@@ -806,8 +808,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 20,
+    marginTop: 'auto', // Push button to bottom
+    marginBottom: 0, // Remove bottom margin since we have paddingBottom on container
   },
   processButtonDisabled: {
     backgroundColor: '#C7C7CC',

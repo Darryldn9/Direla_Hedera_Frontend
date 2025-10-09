@@ -18,6 +18,7 @@ import { useBNPL } from '../../hooks/useBNPL';
 import { BNPLTerms } from '../../types/api';
 import { formatCurrency as formatCurrencyUtil } from '../../utils/currency';
 import PageHeader from '../../components/PageHeader';
+import { Colors } from '../../lib/colors';
 import { api } from '../../services/api';
 
 interface LoanOffer {
@@ -926,7 +927,7 @@ export default function LendingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7', // iOS-like light gray (same as Hub/Sales/Money)
+    backgroundColor: Colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -938,20 +939,20 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
   },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: 20,
     marginTop: 4,
     marginBottom: 20,
-    backgroundColor: '#E5E5E5',
+    backgroundColor: Colors.semantic.border,
     borderRadius: 12,
     padding: 4,
   },
@@ -962,9 +963,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -972,18 +973,18 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
   },
   activeTabText: {
-    color: '#0C7C59',
+    color: Colors.semantic.primary,
   },
   creditScoreCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     marginHorizontal: 20,
     marginBottom: 20,
     padding: 20,
     borderRadius: 16,
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -998,7 +999,7 @@ const styles = StyleSheet.create({
   creditScoreLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
   },
   creditScoreValue: {
     fontSize: 32,
@@ -1015,7 +1016,7 @@ const styles = StyleSheet.create({
   creditScoreDescription: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
     marginBottom: 12,
   },
   creditFactors: {

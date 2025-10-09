@@ -19,6 +19,7 @@ import {
 
 import NewSaleModal from '../../components/NewSaleModal';
 import PageHeader from '../../components/PageHeader';
+import { Colors } from '../../lib/colors';
 import { useAccount } from '../../contexts/AccountContext';
 import { useMetrics } from '../../hooks/useMetrics';
 
@@ -156,7 +157,7 @@ export default function HubScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: Colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
   },
   sectionContainer: {
     paddingHorizontal: 20,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
   },
   contentContainer: {
     paddingHorizontal: 20,
@@ -194,11 +195,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     borderRadius: 16,
     padding: 16,
     flex: 1,
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -212,19 +213,19 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
     marginBottom: 8,
   },
   largeNumber: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 4,
   },
   cardSubtext: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
   },
   reportsSection: {
     paddingVertical: 16,
@@ -233,14 +234,14 @@ const styles = StyleSheet.create({
   reportsText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
   },
   graphContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     borderRadius: 16,
     padding: 20,
     marginTop: -15,
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -249,7 +250,7 @@ const styles = StyleSheet.create({
   graphTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 20,
   },
   graphBars: {
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0C7C59',
+    backgroundColor: Colors.semantic.primary,
     marginTop: 0,
     marginBottom: 0,
     paddingVertical: 16,

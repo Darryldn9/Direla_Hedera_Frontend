@@ -16,6 +16,7 @@ import SendModal from '../../components/SendModal';
 import RequestModal from '../../components/RequestModal';
 import WithdrawModal from '../../components/WithdrawModal';
 import PageHeader from '../../components/PageHeader';
+import { Colors } from '../../lib/colors';
 
 interface Transaction {
   id: string;
@@ -456,7 +457,7 @@ export default React.memo(WalletScreen);
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7', // iOS-like light gray (same as other pages)
+    backgroundColor: Colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -476,26 +477,26 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
   },
   buttonRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   refreshButton: {
-    backgroundColor: '#0C7C59',
+    backgroundColor: Colors.semantic.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
   refreshButtonText: {
-    color: '#FFFFFF',
+    color: Colors.utility.white,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
   },
   balanceToggleText: {
     marginLeft: 8,
-    color: '#7F8C8D',
+    color: Colors.semantic.textSecondary,
     fontSize: 14,
   },
   quickActions: {
@@ -523,7 +524,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 15,
   },
   actionsGrid: {
@@ -533,11 +534,11 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     padding: 12,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -547,7 +548,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
   },
   features: {
     paddingHorizontal: 20,

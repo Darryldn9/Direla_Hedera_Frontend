@@ -23,6 +23,7 @@ import { useAccount } from '../../contexts/AccountContext';
 import { useCachedTransactions } from '../../hooks/useCachedTransactions';
 import { TransactionHistoryItem } from '../../types/api';
 import PageHeader from '../../components/PageHeader';
+import { Colors } from '../../lib/colors';
 
 export default function SalesScreen() {
   const insets = useSafeAreaInsets();
@@ -307,7 +308,7 @@ export default function SalesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7', // iOS-like light gray (same as Hub)
+    backgroundColor: Colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -316,24 +317,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 30,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: Colors.semantic.background,
   },
   periodText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
     marginBottom: 8,
   },
   revenueAmount: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 8,
   },
   motivationalText: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
     textAlign: 'center',
   },
   actionButtonsContainer: {
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.semantic.textPrimary,
     paddingVertical: 16,
     paddingHorizontal: 12,
     borderRadius: 16,
@@ -356,7 +357,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.utility.white,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -364,19 +365,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: Colors.semantic.background,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
   },
   transactionContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     marginHorizontal: 20,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
