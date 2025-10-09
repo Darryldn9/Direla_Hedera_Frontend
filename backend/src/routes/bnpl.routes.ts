@@ -38,14 +38,15 @@ router.post('/terms', async (req: Request, res: Response) => {
       expiresInMinutes
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: terms,
       message: 'BNPL terms created successfully'
     } as ApiResponse);
+
   } catch (error) {
     console.error('Error creating BNPL terms:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create BNPL terms'
     } as ApiResponse);
@@ -59,14 +60,14 @@ router.get('/terms/:paymentId/:accountId', async (req: Request, res: Response) =
 
     const terms = await bnplService.getTerms(paymentId!, accountId!);
 
-    res.json({
+    return res.json({
       success: true,
       data: terms,
       message: terms ? 'BNPL terms found' : 'No BNPL terms found'
     } as ApiResponse);
   } catch (error) {
     console.error('Error getting BNPL terms:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get BNPL terms'
     } as ApiResponse);
@@ -88,14 +89,14 @@ router.post('/terms/:termsId/accept', async (req: Request, res: Response) => {
 
     const result = await bnplService.acceptTerms(termsId!, accountId!);
 
-    res.json({
+    return res.json({
       success: true,
       data: result,
       message: 'BNPL terms accepted successfully'
     } as ApiResponse);
   } catch (error) {
     console.error('Error accepting BNPL terms:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to accept BNPL terms'
     } as ApiResponse);
@@ -117,14 +118,14 @@ router.post('/terms/:termsId/reject', async (req: Request, res: Response) => {
 
     const result = await bnplService.rejectTerms(termsId!, accountId!, reason);
 
-    res.json({
+    return res.json({
       success: true,
       data: result,
       message: 'BNPL terms rejected successfully'
     } as ApiResponse);
   } catch (error) {
     console.error('Error rejecting BNPL terms:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to reject BNPL terms'
     } as ApiResponse);
@@ -138,14 +139,14 @@ router.get('/merchant/:accountId/pending', async (req: Request, res: Response) =
 
     const terms = await bnplService.getPendingTermsForMerchant(accountId!);
 
-    res.json({
+    return res.json({
       success: true,
       data: terms,
       message: 'Pending BNPL terms retrieved successfully'
     } as ApiResponse);
   } catch (error) {
     console.error('Error getting pending BNPL terms:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get pending BNPL terms'
     } as ApiResponse);
@@ -159,14 +160,14 @@ router.get('/merchant/:accountId', async (req: Request, res: Response) => {
 
     const terms = await bnplService.getTermsForMerchant(accountId!);
 
-    res.json({
+    return res.json({
       success: true,
       data: terms,
       message: 'BNPL terms for merchant retrieved successfully'
     } as ApiResponse);
   } catch (error) {
     console.error('Error getting BNPL terms for merchant', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get BNPL terms for merchant'
     } as ApiResponse);
@@ -180,14 +181,14 @@ router.get('/buyer/:accountId', async (req: Request, res: Response) => {
 
     const terms = await bnplService.getTermsForBuyer(accountId!);
 
-    res.json({
+    return res.json({
       success: true,
       data: terms,
       message: 'BNPL terms for buyer retrieved successfully'
     } as ApiResponse);
   } catch (error) {
     console.error('Error getting BNPL terms for buyer:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get BNPL terms for buyer'
     } as ApiResponse);
@@ -221,14 +222,15 @@ router.post('/quote', async (req: Request, res: Response) => {
       merchantCurrency
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: quote,
       message: 'BNPL currency quote generated successfully'
     } as ApiResponse);
+    
   } catch (error) {
     console.error('Error generating BNPL currency quote:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to generate BNPL currency quote'
     } as ApiResponse);
@@ -259,14 +261,14 @@ router.post('/terms/:termsId/convert', async (req: Request, res: Response) => {
 
     const convertedTerms = await bnplService.convertTermsToBuyerCurrency(terms, buyerCurrency);
 
-    res.json({
+    return res.json({
       success: true,
       data: convertedTerms,
       message: 'BNPL terms converted to buyer currency successfully'
     } as ApiResponse);
   } catch (error) {
     console.error('Error converting BNPL terms to buyer currency:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to convert BNPL terms to buyer currency'
     } as ApiResponse);
@@ -303,20 +305,20 @@ router.post('/installment/pay', async (req: Request, res: Response) => {
     );
 
     if (result.success) {
-      res.json({
+      return res.json({
         success: true,
         data: result,
         message: 'BNPL installment payment processed successfully'
       } as ApiResponse);
     } else {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         error: result.error || 'Failed to process installment payment'
       } as ApiResponse);
     }
   } catch (error) {
     console.error('Error processing BNPL installment payment:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to process BNPL installment payment'
     } as ApiResponse);

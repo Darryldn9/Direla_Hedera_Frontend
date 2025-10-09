@@ -34,10 +34,10 @@ router.get('/:userId', async (req: Request, res: Response) => {
       message: kyc ? 'KYC data retrieved successfully' : 'No KYC data found for user'
     };
 
-    res.status(200).json(response);
+    return res.status(200).json(response);
   } catch (error) {
     console.error('Error getting KYC data:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error'
     } as ApiResponse);
@@ -87,10 +87,10 @@ router.post('/', async (req: Request, res: Response) => {
       message: 'KYC data created successfully'
     };
 
-    res.status(201).json(response);
+    return res.status(201).json(response);
   } catch (error) {
     console.error('Error creating KYC data:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error'
     } as ApiResponse);
@@ -147,10 +147,10 @@ router.put('/:userId', async (req: Request, res: Response) => {
       message: 'KYC data updated successfully'
     };
 
-    res.status(200).json(response);
+    return res.status(200).json(response);
   } catch (error) {
     console.error('Error updating KYC data:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error'
     } as ApiResponse);
@@ -191,10 +191,10 @@ router.post('/upsert', async (req: Request, res: Response) => {
       message: 'KYC data saved successfully'
     };
 
-    res.status(200).json(response);
+    return res.status(200).json(response);
   } catch (error) {
     console.error('Error upserting KYC data:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error'
     } as ApiResponse);
@@ -234,13 +234,13 @@ router.delete('/:userId', async (req: Request, res: Response) => {
       } as ApiResponse);
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'KYC data deleted successfully'
     } as ApiResponse);
   } catch (error) {
     console.error('Error deleting KYC data:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error'
     } as ApiResponse);
