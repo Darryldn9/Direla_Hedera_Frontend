@@ -13,22 +13,25 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.');
 }
 
-let supabase: ReturnType<typeof createClient<Database>>;
+let _supabase: ReturnType<typeof createClient<Database>>;
 
 export const getSupabaseClient = () => {
-  if (!supabase) {
+  if (!_supabase) {
     try {
-      supabase = createClient<Database>(supabaseUrl, supabaseKey);
+      _supabase = createClient<Database>(supabaseUrl, supabaseKey);
       logger.info('Supabase client initialized', { url: supabaseUrl });
     } catch (error) {
       logger.error('Failed to initialize Supabase client', { error, url: supabaseUrl });
       throw error;
     }
   }
-  return supabase;
+  return _supabase;
 };
 
 export const closeSupabaseConnection = async () => {
   // Supabase client doesn't require explicit closing
   logger.info('Supabase connection closed');
 };
+
+// Export the supabase client for direct use (initialized on first call)
+export const supabase = getSupabaseClient();

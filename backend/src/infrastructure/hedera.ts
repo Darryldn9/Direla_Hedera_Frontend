@@ -675,12 +675,18 @@ export class HederaInfrastructure {
         const consensusTimestamp = Number(transaction.consensus_timestamp.split('.')[0]) * 1000;
         const gasFee = transaction.charged_tx_fee || 0;
         
-        // Process token transfers within this transaction
+        // Process token transfers within this transaction - only USD and ZAR stablecoins
         if (transaction.token_transfers && transaction.token_transfers.length > 0) {
           for (const tokenTransfer of transaction.token_transfers) {
+            const currency = this.getCurrencyFromTokenId(tokenTransfer.token_id);
+            
+            // Only process USD and ZAR stablecoin transactions
+            if (currency !== 'USD' && currency !== 'ZAR') {
+              continue;
+            }
+            
             const isReceive = tokenTransfer.amount > 0;
             const amount = Math.abs(tokenTransfer.amount);
-            const currency = this.getCurrencyFromTokenId(tokenTransfer.token_id);
             
             // Determine transaction type based on the transaction name
             let type = 'TRANSFER';
@@ -708,32 +714,8 @@ export class HederaInfrastructure {
           }
         }
 
-        // Process HBAR transfers (if any)
-        if (transaction.transfers && transaction.transfers.length > 0) {
-          for (const transfer of transaction.transfers) {
-            // Skip fee transfers and transfers to/from the account itself
-            if (transfer.account === accountId || transfer.amount === 0) {
-              continue;
-            }
-
-            const isReceive = transfer.amount > 0;
-            const amount = Math.abs(transfer.amount) / 100000000; // Convert tinybars to HBAR
-
-            transactionHistoryItems.push({
-              amount,
-              currency: 'HBAR',
-              gasFee: 0,
-              time: consensusTimestamp,
-              to: isReceive ? accountId : transfer.account,
-              from: isReceive ? transfer.account : accountId,
-              fromAlias: isReceive ? transfer.account : accountId,
-              toAlias: isReceive ? accountId : transfer.account,
-              transactionId: transaction.transaction_id,
-              type: 'TRANSFER',
-              memo: transaction.memo_base64 ? Buffer.from(transaction.memo_base64, 'base64').toString() : ''
-            });
-          }
-        }
+        // Skip HBAR transfers - only include USD and ZAR stablecoin transactions
+        // HBAR transfers are excluded to focus on stablecoin transactions only
       }
 
       // Sort all transactions by time (most recent first) and limit results

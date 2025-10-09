@@ -5,6 +5,7 @@ export { HederaService } from './hedera.service';
 export { PaymentService } from './payment.service';
 export { TransactionService } from './transaction.service';
 export { DIDService } from './did.service';
+export { BNPLService } from './bnpl.service';
 export { getApiConfig, API_ENDPOINTS } from './config';
 export { MetricsService } from './metrics.service';
 
@@ -17,6 +18,7 @@ import { HederaService } from './hedera.service';
 import { PaymentService } from './payment.service';
 import { TransactionService } from './transaction.service';
 import { DIDService } from './did.service';
+import { BNPLService } from './bnpl.service';
 import { ApiConfig } from '../../types/api';
 import { MetricsService } from './metrics.service';
 
@@ -26,6 +28,7 @@ export class ApiService {
   public payment: PaymentService;
   public transaction: TransactionService;
   public did: DIDService;
+  public bnpl: BNPLService;
   public metrics: MetricsService;
 
   constructor(config?: Partial<ApiConfig>) {
@@ -34,6 +37,7 @@ export class ApiService {
     this.payment = new PaymentService(config);
     this.transaction = new TransactionService(config);
     this.did = new DIDService(config);
+    this.bnpl = new BNPLService(config);
     this.metrics = new MetricsService(config);
   }
 
