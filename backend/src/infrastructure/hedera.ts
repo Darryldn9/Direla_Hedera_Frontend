@@ -720,6 +720,7 @@ export class HederaInfrastructure {
 
       // Sort all transactions by time (most recent first) and limit results
       const allTransactions = transactionHistoryItems
+        .filter(({ type }) => type === "MINT")
         .sort((a, b) => b.time - a.time)
         .slice(0, limit);
 

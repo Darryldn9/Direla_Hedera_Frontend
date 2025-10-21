@@ -22,6 +22,7 @@ export class HederaAccountRoutes {
     this.router.get('/info/:accountId', this.getAccountInfo.bind(this));
     this.router.post('/', this.createAccount.bind(this));
     this.router.put('/:id', this.updateAccount.bind(this));
+    this.router.put('/:id/currency', this.updateAccountCurrency.bind(this));
     this.router.delete('/:id', this.deleteAccount.bind(this));
   }
 
@@ -519,7 +520,7 @@ export class HederaAccountRoutes {
   private async updateAccount(req: Request, res: Response): Promise<void> {
     try {
       const accountId = parseInt(req.params.id!);
-      const { alias, isActive } = req.body;
+      const { alias, isActive, currency } = req.body;
       
       if (isNaN(accountId)) {
         res.status(400).json({
@@ -529,9 +530,9 @@ export class HederaAccountRoutes {
         return;
       }
 
-      logger.info('PUT /hedera-accounts/:id - Updating account', { accountId, alias, isActive });
+      logger.info('PUT /hedera-accounts/:id - Updating account', { accountId, alias, isActive, currency });
       
-      const account = await this.hederaAccountService.updateAccount(accountId, { alias, is_active: isActive });
+      const account = await this.hederaAccountService.updateAccount(accountId, { alias, is_active: isActive, currency });
       
       if (!account) {
         res.status(404).json({
@@ -810,6 +811,126 @@ export class HederaAccountRoutes {
       res.status(500).json({
         success: false,
         error: 'Failed to get account info'
+      });
+    }
+  }
+
+  /**
+   * @swagger
+   * /hedera-accounts/{id}/currency:
+   *   put:
+   *     summary: Update account currency
+   *     tags: [Hedera Accounts]
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: Account ID
+   *         example: 1
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               currency:
+   *                 type: string
+   *                 description: New preferred currency
+   *                 example: 'USD'
+   *                 enum: ['ZAR', 'USD']
+   *             required:
+   *               - currency
+   *     responses:
+   *       200:
+   *         description: Account currency updated successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   $ref: '#/components/schemas/HederaAccount'
+   *                 message:
+   *                   type: string
+   *                   example: "Account currency updated successfully"
+   *       400:
+   *         description: Invalid request
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       404:
+   *         description: Account not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  private async updateAccountCurrency(req: Request, res: Response): Promise<void> {
+    try {
+      const accountId = parseInt(req.params.id!);
+      const { currency } = req.body;
+      
+      if (isNaN(accountId)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid account ID'
+        });
+        return;
+      }
+
+      if (!currency) {
+        res.status(400).json({
+          success: false,
+          error: 'Currency is required'
+        });
+        return;
+      }
+
+      // Validate currency
+      const supportedCurrencies = ['ZAR', 'USD'];
+      if (!supportedCurrencies.includes(currency.toUpperCase())) {
+        res.status(400).json({
+          success: false,
+          error: `Unsupported currency. Supported currencies: ${supportedCurrencies.join(', ')}`
+        });
+        return;
+      }
+
+      logger.info('PUT /hedera-accounts/:id/currency - Updating account currency', { accountId, currency });
+      
+      const account = await this.hederaAccountService.updateAccount(accountId, { currency: currency.toUpperCase() });
+      
+      if (!account) {
+        res.status(404).json({
+          success: false,
+          error: 'Hedera account not found'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: account,
+        message: 'Account currency updated successfully'
+      });
+    } catch (error) {
+      logger.error('PUT /hedera-accounts/:id/currency failed', { accountId: req.params.id, error, body: req.body });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update account currency'
       });
     }
   }

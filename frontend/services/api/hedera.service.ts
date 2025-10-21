@@ -81,6 +81,13 @@ export class HederaService extends BaseApiService {
   }
 
   /**
+   * Update account currency
+   */
+  async updateAccountCurrency(accountId: string | number, currency: string): Promise<ApiResponse<HederaAccount>> {
+    return this.put<HederaAccount>(API_ENDPOINTS.HEDERA_ACCOUNT_CURRENCY(accountId), { currency });
+  }
+
+  /**
    * Delete Hedera account
    */
   async deleteAccount(accountId: string | number): Promise<ApiResponse<void>> {

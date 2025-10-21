@@ -64,6 +64,12 @@ export interface CreateHederaAccountResponse {
   updated_at: string;
 }
 
+export interface UpdateHederaAccountRequest {
+  alias?: string;
+  is_active?: boolean;
+  currency?: string;
+}
+
 export interface CurrencyBalance {
   code: string;
   amount: number;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,17 @@ export default function HubScreen() {
   
   const todaysRevenue = dailyRevenue?.revenue ?? 0;
   const monthlySales = monthlySummary?.count ?? 0;
-  const isOnline = true;
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refresh();
+      if (error) {
+        setIsOnline(false);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   const handleNewSale = () => {
     setShowNewSaleModal(true);
@@ -59,12 +69,7 @@ export default function HubScreen() {
 
         {/* Page Title */}
         <View style={styles.titleContainer}>
-          <Text style={styles.pageTitle}>Hub</Text>
-        </View>
-
-        {/* Most Visited Section */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Most visited</Text>
+          <Text style={styles.pageTitle}>Direla Hub</Text>
         </View>
 
         {/* Main Content Grid */}

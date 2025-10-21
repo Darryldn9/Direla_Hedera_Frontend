@@ -160,25 +160,10 @@ export class TransactionCacheManagerServiceImpl implements TransactionCacheManag
     try {
       logger.info('Getting cached transactions for period', { accountId, periodType, startTime, endTime });
 
-      const transactions = await this.cachedTransactionService.getCachedTransactions(accountId, periodType);
-      
-      if (!transactions) {
-        logger.info('No cached transactions found', { accountId, periodType });
-        return [];
-      }
+      const transactions = await this.hederaService.getTransactionHistory(accountId, 1000);
 
-      // Apply time filtering if specified
-      let filteredTransactions = transactions;
-      if (startTime || endTime) {
-        filteredTransactions = transactions.filter(tx => {
-          if (startTime && tx.time < startTime) return false;
-          if (endTime && tx.time > endTime) return false;
-          return true;
-        });
-      }
-
-      logger.info('Cached transactions retrieved successfully', { count: filteredTransactions.length });
-      return filteredTransactions;
+      logger.info('Cached transactions retrieved successfully', { count: transactions.length });
+      return transactions;
     } catch (error) {
       logger.error('Failed to get cached transactions for period', { accountId, periodType, error });
       throw error;

@@ -1,6 +1,6 @@
 // Currency utility functions
 
-export type SupportedCurrency = 'HBAR' | 'USD' | 'EUR' | 'GBP' | 'ZAR' | 'BTC' | 'XRP';
+export type SupportedCurrency = 'ZAR' | 'USD';
 
 export interface CurrencyInfo {
   symbol: string;
@@ -13,51 +13,16 @@ export interface CurrencyInfo {
 export const CURRENCY_MAP: Record<SupportedCurrency, CurrencyInfo> = {
   'USD': {
     symbol: '$',
-    name: 'USD Stablecoin',
-    decimals: 2,
-    position: 'before',
-    type: 'stablecoin'
-  },
-  'EUR': {
-    symbol: '€',
-    name: 'EUR Stablecoin',
-    decimals: 2,
-    position: 'before',
-    type: 'stablecoin'
-  },
-  'GBP': {
-    symbol: '£',
-    name: 'GBP Stablecoin',
+    name: 'US Dollar',
     decimals: 2,
     position: 'before',
     type: 'stablecoin'
   },
   'ZAR': {
     symbol: 'R',
-    name: 'ZAR Stablecoin',
+    name: 'South African Rand',
     decimals: 2,
     position: 'before',
-    type: 'stablecoin'
-  },
-  'HBAR': {
-    symbol: 'HBAR',
-    name: 'Hedera Hashgraph',
-    decimals: 2,
-    position: 'after',
-    type: 'cryptocurrency'
-  },
-  'BTC': {
-    symbol: '₿',
-    name: 'Bitcoin',
-    decimals: 8,
-    position: 'before',
-    type: 'cryptocurrency'
-  },
-  'XRP': {
-    symbol: 'XRP',
-    name: 'XRP Stablecoin',
-    decimals: 6,
-    position: 'after',
     type: 'stablecoin'
   }
 };
@@ -71,7 +36,7 @@ export function formatCurrency(
   showSymbol: boolean = true
 ): string {
   const currencyKey = currency.toUpperCase() as SupportedCurrency;
-  const currencyInfo = CURRENCY_MAP[currencyKey] || CURRENCY_MAP['HBAR']; // Default to HBAR
+  const currencyInfo = CURRENCY_MAP[currencyKey] || CURRENCY_MAP['ZAR']; // Default to ZAR
 
   const formattedAmount = amount.toFixed(currencyInfo.decimals);
 
@@ -96,7 +61,7 @@ export function formatCurrencyWithHide(
 ): string {
   if (!showAmount) {
     const currencyKey = currency.toUpperCase() as SupportedCurrency;
-    const currencyInfo = CURRENCY_MAP[currencyKey] || CURRENCY_MAP['HBAR'];
+    const currencyInfo = CURRENCY_MAP[currencyKey] || CURRENCY_MAP['ZAR'];
 
     if (currencyInfo.position === 'before') {
       return `${currencyInfo.symbol}••••••`;
@@ -113,7 +78,7 @@ export function formatCurrencyWithHide(
  */
 export function getCurrencySymbol(currency: string): string {
   const currencyKey = currency.toUpperCase() as SupportedCurrency;
-  const currencyInfo = CURRENCY_MAP[currencyKey] || CURRENCY_MAP['HBAR'];
+  const currencyInfo = CURRENCY_MAP[currencyKey] || CURRENCY_MAP['ZAR'];
   return currencyInfo.symbol;
 }
 
@@ -122,7 +87,7 @@ export function getCurrencySymbol(currency: string): string {
  */
 export function getCurrencyInfo(currency: string): CurrencyInfo {
   const currencyKey = currency.toUpperCase() as SupportedCurrency;
-  return CURRENCY_MAP[currencyKey] || CURRENCY_MAP['HBAR'];
+  return CURRENCY_MAP[currencyKey] || CURRENCY_MAP['ZAR'];
 }
 
 /**
@@ -161,19 +126,19 @@ export function isStablecoin(currency: string): boolean {
 
 /**
  * Auto-detect currency from account balance data
- * Falls back to HBAR if not determinable
+ * Falls back to ZAR if not determinable
  */
 export function detectCurrency(accountData?: any): SupportedCurrency {
-  // For Hedera accounts, we're always dealing with HBAR
+  // For Hedera accounts, we're always dealing with ZAR or USD
   // In the future, you could add logic to detect other currencies
   // based on token associations or account metadata
-  return 'HBAR';
+  return 'ZAR';
 }
 
 /**
  * Get the current default currency for the app
- * Currently HBAR since we're on Hedera network
+ * Currently ZAR since we're in South Africa
  */
 export function getDefaultCurrency(): SupportedCurrency {
-  return 'HBAR';
+  return 'ZAR';
 }

@@ -77,7 +77,7 @@ function WalletScreen() {
       const balance = await getMultiCurrencyBalance(selectedAccount.account_id);
       if (balance && balance.balances && balance.balances.length > 0) {
         // Find the balance for the account's currency from the database
-        const accountCurrency = selectedAccount.currency || 'HBAR';
+        const accountCurrency = selectedAccount.currency || 'ZAR';
         const currencyBalance = balance.balances.find(b => b.code === accountCurrency);
         
         if (currencyBalance) {
@@ -181,7 +181,7 @@ function WalletScreen() {
 
   
   const cardNumber = '4532 1234 5678 9012';
-  const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
+  const holderName = selectedAccount?.alias!;
   const expiryDate = '12/28';
 
 
@@ -388,16 +388,6 @@ function WalletScreen() {
               <Text style={styles.emptySubtext}>Your transaction history will appear here</Text>
             </View>
           )}
-        </View>
-
-        <View style={styles.features}>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureTitle}>Use anywhere Mastercard is accepted</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureEmoji}>⚡</Text>
-            <Text style={styles.featureTitle}>Instant top-ups from your Direla balance</Text>
-          </View>
         </View>
 
         <AppleWalletModal 

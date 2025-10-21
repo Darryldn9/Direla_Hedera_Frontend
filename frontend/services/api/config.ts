@@ -42,6 +42,7 @@ export const API_ENDPOINTS = {
   HEDERA_ACCOUNT_BY_ID: (id: string | number) => `/hedera-accounts/${id}`,
   HEDERA_ACCOUNT_BALANCE: (accountId: string) => `/hedera-accounts/balance/${accountId}`,
   HEDERA_ACCOUNT_INFO: (accountId: string) => `/hedera-accounts/info/${accountId}`,
+  HEDERA_ACCOUNT_CURRENCY: (id: string | number) => `/hedera-accounts/${id}/currency`,
   HEDERA_ACCOUNTS_ACTIVE: '/hedera-accounts/active',
   HEDERA_ACCOUNTS_BY_USER: (userId: string) => `/hedera-accounts/user/${userId}`,
   
