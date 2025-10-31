@@ -26,6 +26,8 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
 import { assertValidHederaAccountId } from '../utils/hedera-validation.js';
 import { fromBaseUnits } from '../utils/token-amount.js';
+import { HederaAccountServiceImpl } from '../services/hedera-account.service.js';
+import { supabase } from '../database/connection.js';
 
 export class HederaInfrastructure {
   private client: Client;
@@ -718,9 +720,22 @@ export class HederaInfrastructure {
         // HBAR transfers are excluded to focus on stablecoin transactions only
       }
 
+      const account = await supabase.from('hedera_accounts').select('currency').eq('account_id', accountId).single();
+      const accountCurrency = account.data?.currency;
+
+      // Remove duplicates based on transaction ID
+      const seenTransactionIds = new Set<string>();
+      const uniqueTransactions = transactionHistoryItems.filter((item) => {
+        if (seenTransactionIds.has(item.transactionId)) {
+          return false;
+        }
+        seenTransactionIds.add(item.transactionId);
+        return true;
+      });
+
       // Sort all transactions by time (most recent first) and limit results
-      const allTransactions = transactionHistoryItems
-        .filter(({ type }) => type === "MINT")
+      const allTransactions = uniqueTransactions
+        .filter(({ currency }) => currency.toLowerCase() === accountCurrency?.toLowerCase())
         .sort((a, b) => b.time - a.time)
         .slice(0, limit);
 

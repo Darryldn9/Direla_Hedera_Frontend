@@ -43,6 +43,7 @@ function WalletScreen() {
   const { getMultiCurrencyBalance } = useHederaOperations();
   const { generateQuote } = useQuote();
   const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
+  const accountAlias = useMemo(() => selectedAccount?.alias, [selectedAccount?.alias]);
 
   // Fetch transaction history for the selected account
   const {
@@ -316,6 +317,7 @@ function WalletScreen() {
               };
 
               const getTransactionIconType = () => {
+                console.log(transaction.fromAlias, accountAlias);
                 switch (transaction.type) {
                   case 'SEND':
                     return 'sent';
@@ -323,8 +325,13 @@ function WalletScreen() {
                     return 'received';
                   case 'BURN':
                     return 'burn';
-                  default:
-                    return 'sent';
+                  default: {
+                    if(transaction.fromAlias !== accountAlias) {
+                      return 'sent';
+                    } else {
+                      return 'received';
+                    }
+                  }
                 }
               };
 
@@ -355,7 +362,7 @@ function WalletScreen() {
               };
 
               return (
-                <TouchableOpacity key={`tx-${transaction.transactionId}`} style={styles.transactionItem}>
+                <TouchableOpacity key={`tx-${transaction.transactionId}=${Math.random()}`} style={styles.transactionItem}>
                   <View style={styles.transactionIcon}>
                     {getTransactionIcon(getTransactionIconType())}
                   </View>
@@ -372,7 +379,7 @@ function WalletScreen() {
                       styles.transactionAmountText,
                       { color: getAmountColor() }
                     ]}>
-                      {getAmountPrefix()}{displayAmount.toFixed(2)} {displayCurrency}
+                      {getAmountPrefix()}{(displayAmount/100).toFixed(2)} {displayCurrency}
                     </Text>
                     <View style={[
                       styles.statusDot,
