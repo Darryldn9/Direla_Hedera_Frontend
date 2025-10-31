@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hedera-backend
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3000}
+      - HEDERA_ACCOUNT_ID=${HEDERA_ACCOUNT_ID}
+      - HEDERA_PRIVATE_KEY=${HEDERA_PRIVATE_KEY}
+      - HEDERA_NETWORK=${HEDERA_NETWORK:-testnet}
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - REDIS_TTL_SECONDS=${REDIS_TTL_SECONDS:-30}
+      - USD_TOKEN_ID=${USD_TOKEN_ID}
+      - ZAR_TOKEN_ID=${ZAR_TOKEN_ID}
+      - USD_SUPPLY_KEY=${USD_SUPPLY_KEY}
+      - ZAR_SUPPLY_KEY=${ZAR_SUPPLY_KEY}
+      - FIXER_API_KEY=${FIXER_API_KEY}
+      - CURRENCY_LAYER_API_KEY=${CURRENCY_LAYER_API_KEY}
+      - EXCHANGE_RATE_API_KEY=${EXCHANGE_RATE_API_KEY}
+      - RATE_CACHE_TTL=${RATE_CACHE_TTL}
+      - BNPL_ADDRESS=${BNPL_ADDRESS}
+      - HEDERA_EVM_RPC_URL=${HEDERA_EVM_RPC_URL}
+      - HEDERA_EVM_PRIVATE_KEY=${HEDERA_EVM_PRIVATE_KEY}
+      - BNPL_RPC_URL=${BNPL_RPC_URL}
+      - BNPL_PRIVATE_KEY=${BNPL_PRIVATE_KEY}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - HCS_TOPIC_ID=${HCS_TOPIC_ID}
+      - EXTERNAL_API_URL=${EXTERNAL_API_URL}
+      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - hedera-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: hedera-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - hedera-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  hedera-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+
