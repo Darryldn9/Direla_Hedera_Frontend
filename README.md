@@ -7,7 +7,7 @@
 ## Pitch Deck & Certification
 
 - **Pitch Deck:** https://www.canva.com/design/DAG3BLdZHSc/DkNG6YdPQWMTcrqQOk4LGQ/view?utm_content=DAG3BLdZHSc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h615475e329 [https://www.canva.com/design/DAG3BLdZHSc/DkNG6YdPQWMTcrqQOk4LGQ/view?utm_content=DAG3BLdZHSc&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h615475e329]
-- **Pitch Video:** https://youtu.be/cre6BbulTS0 [https://youtu.be/cre6BbulTS0]
+- **Pitch Video:** https://youtu.be/Sf8Wru6vPx8 [https://youtu.be/Sf8Wru6vPx8]
 - **Certification Links:** https://drive.google.com/file/d/1r-uRyLJRfBlkzgTPcfv3jXm59rCqYHSy/view?usp=drive_link [https://drive.google.com/file/d/1r-uRyLJRfBlkzgTPcfv3jXm59rCqYHSy/view?usp=drive_link]
 
 
