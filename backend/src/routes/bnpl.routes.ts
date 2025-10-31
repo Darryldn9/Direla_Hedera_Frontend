@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { getSupabaseClient } from '../database/connection';
 import { BNPLService } from '../services/bnpl.service';
 import { ApiResponse } from '../types/index';
 
@@ -282,16 +283,56 @@ router.post('/installment/pay', async (req: Request, res: Response) => {
       agreementId,
       consumerAccountId,
       merchantAccountId,
-      amount,
-      currency,
-      payerCurrency
+      amount
     } = req.body;
 
     // Validate required fields
-    if (!agreementId || !consumerAccountId || !merchantAccountId || !amount || !currency) {
+    if (!agreementId || !consumerAccountId || !merchantAccountId || !amount) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: agreementId, consumerAccountId, merchantAccountId, amount, currency'
+        error: 'Missing required fields: agreementId, consumerAccountId, merchantAccountId, amount'
+      } as ApiResponse);
+    }
+
+    // Resolve currencies from accounts to ensure correct conversion:
+    // - settlement currency = merchant account currency
+    // - payer currency = consumer account currency
+    const supabase = getSupabaseClient();
+    const [{ data: consumerRow, error: consumerErr }, { data: merchantRow, error: merchantErr }] = await Promise.all([
+      supabase
+        .from('hedera_accounts')
+        .select('currency')
+        .eq('account_id', consumerAccountId)
+        .single(),
+      supabase
+        .from('hedera_accounts')
+        .select('currency')
+        .eq('account_id', merchantAccountId)
+        .single()
+    ]);
+
+    if (consumerErr || !consumerRow) {
+      return res.status(400).json({
+        success: false,
+        error: `Consumer account not found or missing currency: ${consumerErr?.message || ''}`.trim()
+      } as ApiResponse);
+    }
+
+    if (merchantErr || !merchantRow) {
+      return res.status(400).json({
+        success: false,
+        error: `Merchant account not found or missing currency: ${merchantErr?.message || ''}`.trim()
+      } as ApiResponse);
+    }
+
+    // Strictly derive currencies from account records to avoid client-side mistakes
+    const settlementCurrency = String(merchantRow.currency || '').toUpperCase();
+    const payerCurrencyResolved = String(consumerRow.currency || '').toUpperCase();
+
+    if (!settlementCurrency) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unable to resolve settlement currency from merchant account'
       } as ApiResponse);
     }
 
@@ -300,8 +341,8 @@ router.post('/installment/pay', async (req: Request, res: Response) => {
       consumerAccountId,
       merchantAccountId,
       parseFloat(amount),
-      currency,
-      payerCurrency
+      settlementCurrency,
+      payerCurrencyResolved || undefined
     );
 
     if (result.success) {

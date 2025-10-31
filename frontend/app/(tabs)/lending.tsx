@@ -20,6 +20,7 @@ import { formatCurrency as formatCurrencyUtil } from '../../utils/currency';
 import PageHeader from '../../components/PageHeader';
 import { Colors } from '../../lib/colors';
 import { api } from '../../services/api';
+import { useToast } from '../../hooks/useToast';
 
 interface LoanOffer {
   id: string;
@@ -45,6 +46,7 @@ interface LendingOpportunity {
 // BNPL Terms Section Component
 function BNPLTermsSection() {
   const { selectedAccount } = useAccount();
+  const { showInfo, showSuccess, showError, hideAllToasts } = useToast();
   const { 
     getPendingTermsForMerchant, 
     getTermsForMerchant,
@@ -135,20 +137,28 @@ function BNPLTermsSection() {
             setShowCustomAlert(false);
             console.log('[Lending] Attempting to accept terms:', termsId, 'for account:', selectedAccount.account_id);
             try {
+              // Show loading toast while waiting for acceptance confirmation
+              showInfo('Confirming BNPL acceptance…', 'Please wait while we confirm with the network.', 30000);
               const success = await acceptTerms(termsId, selectedAccount.account_id);
               console.log('[Lending] Accept terms result:', success);
               if (success) {
+                hideAllToasts();
+                showSuccess('BNPL terms accepted', 'The customer will be charged in installments.', 4000);
                 showCustomAlertModal('Success', 'BNPL terms accepted successfully!', [
                   { text: 'OK', onPress: () => setShowCustomAlert(false) }
                 ]);
                 loadPendingTerms();
               } else {
+                hideAllToasts();
+                showError('Failed to accept BNPL terms', 'Please try again.');
                 showCustomAlertModal('Error', 'Failed to accept BNPL terms. Please try again.', [
                   { text: 'OK', onPress: () => setShowCustomAlert(false) }
                 ]);
               }
             } catch (error) {
               console.error('[Lending] Error accepting terms:', error);
+              hideAllToasts();
+              showError('Failed to accept BNPL terms', `${error instanceof Error ? error.message : 'Unknown error'}`);
               showCustomAlertModal('Error', `Failed to accept BNPL terms: ${error instanceof Error ? error.message : 'Unknown error'}`, [
                 { text: 'OK', onPress: () => setShowCustomAlert(false) }
               ]);
@@ -1665,7 +1675,7 @@ const styles = StyleSheet.create({
   // Custom Alert Modal Styles
   alertOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.utility.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -1676,7 +1686,7 @@ const styles = StyleSheet.create({
     padding: 24,
     minWidth: 280,
     maxWidth: 320,
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -1688,13 +1698,13 @@ const styles = StyleSheet.create({
   alertTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 12,
     textAlign: 'center',
   },
   alertMessage: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
     lineHeight: 20,
     marginBottom: 24,
     textAlign: 'center',
@@ -1709,30 +1719,32 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#007AFF',
+    backgroundColor: Colors.semantic.primary,
     alignItems: 'center',
   },
   alertButtonCancel: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: Colors.semantic.surface,
+    borderWidth: 1,
+    borderColor: Colors.semantic.border,
   },
   alertButtonDestructive: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: Colors.semantic.error,
   },
   alertButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.utility.white,
   },
   alertButtonTextCancel: {
-    color: '#007AFF',
+    color: Colors.semantic.primary,
   },
   alertButtonTextDestructive: {
-    color: '#FFFFFF',
+    color: Colors.utility.white,
   },
   // History Modal Styles
   historyOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: Colors.utility.overlay,
     justifyContent: 'flex-end',
   },
   historyModal: {

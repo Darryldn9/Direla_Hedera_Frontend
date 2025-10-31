@@ -1082,7 +1082,7 @@ export class BNPLService {
         });
 
         // Use quoted toAmount as the payer charge in their currency
-        burnAmount = quote.toAmount;
+        burnAmount = quote.toAmount * quote.exchangeRate;
 
         logger.info('Currency quote resolved for payer charge', {
           agreementId,

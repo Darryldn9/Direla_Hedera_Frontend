@@ -228,12 +228,6 @@ export default function BuyNowPayLaterModal({ visible, onClose, paymentData }: B
 
             {!terms ? (
               <View style={styles.emptyState}>
-                <CreditCard size={48} color="#8E8E93" />
-                <Text style={styles.emptyTitle}>No BNPL Terms Yet</Text>
-                <Text style={styles.emptyDescription}>
-                  Create BNPL terms to split your payment into 3 weekly installments at 5% interest.
-                </Text>
-                
                 {paymentData ? (
                   <View style={[styles.paymentSummary, { backgroundColor: '#E8F5E8', borderWidth: 2, borderColor: '#0C7C59' }]}>
                     <Text style={styles.summaryTitle}>Payment Summary</Text>
@@ -254,16 +248,16 @@ export default function BuyNowPayLaterModal({ visible, onClose, paymentData }: B
                     <Text style={styles.summaryDetails}>
                       3 installments • 5% interest
                     </Text>
-                    <Text style={{ fontSize: 12, color: '#666', marginTop: 8 }}>
+                    {/* <Text style={{ fontSize: 12, color: '#666', marginTop: 8 }}>
                       DEBUG: Payment data received ✓
-                    </Text>
+                    </Text> */}
                   </View>
                 ) : (
                   <View style={[styles.paymentSummary, { backgroundColor: '#FFE6E6', borderWidth: 2, borderColor: '#E74C3C' }]}>
-                    <Text style={styles.summaryTitle}>No Payment Data</Text>
-                    <Text style={styles.summaryAmount}>Missing payment information</Text>
-                    <Text style={{ fontSize: 12, color: '#E74C3C', marginTop: 8 }}>
-                      DEBUG: No payment data received ✗
+                    <CreditCard size={48} color="#8E8E93" />
+                    <Text style={styles.emptyTitle}>No BNPL Terms Yet</Text>
+                    <Text style={styles.emptyDescription}>
+                      Create BNPL terms to split your payment into 3 weekly installments at 5% interest.
                     </Text>
                   </View>
                 )}
@@ -279,7 +273,7 @@ export default function BuyNowPayLaterModal({ visible, onClose, paymentData }: B
                 </TouchableOpacity>
                 
                 {/* Debug info */}
-                <View style={{ marginTop: 16, padding: 12, backgroundColor: '#F0F0F0', borderRadius: 8 }}>
+                {/* <View style={{ marginTop: 16, padding: 12, backgroundColor: '#F0F0F0', borderRadius: 8 }}>
                   <Text style={{ fontSize: 10, color: '#666' }}>
                     DEBUG INFO:
                   </Text>
@@ -303,7 +297,7 @@ export default function BuyNowPayLaterModal({ visible, onClose, paymentData }: B
                       Currency Match: {paymentData.currency === selectedAccount.currency ? 'Yes' : 'No'}
                     </Text>
                   )}
-                </View>
+                </View> */}
               </View>
             ) : (
               <View style={styles.termsContainer}>
@@ -531,7 +525,6 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 40,
   },
   emptyTitle: {
     fontSize: 18,
