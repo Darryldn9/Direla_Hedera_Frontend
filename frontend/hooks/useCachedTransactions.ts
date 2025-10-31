@@ -51,7 +51,7 @@ export function useCachedTransactions(accountId?: string): UseCachedTransactions
 
   const fetchTransactions = useCallback(async (
     periodType: 'daily' | 'weekly' | 'monthly' | 'all',
-    forceRefresh: boolean = false
+    forceRefresh: boolean = true
   ) => {
     if (!accountId) {
       setError('Account ID is required');

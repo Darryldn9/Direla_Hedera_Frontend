@@ -15,7 +15,9 @@ import DepositModal from '../../components/DepositModal';
 import SendModal from '../../components/SendModal';
 import RequestModal from '../../components/RequestModal';
 import WithdrawModal from '../../components/WithdrawModal';
+import SaleDetailsModal from '../../components/SaleDetailsModal';
 import PageHeader from '../../components/PageHeader';
+import { Colors } from '../../lib/colors';
 
 interface Transaction {
   id: string;
@@ -33,6 +35,14 @@ function WalletScreen() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  
+  // State for transaction details modal
+  const [selectedTransaction, setSelectedTransaction] = useState<{
+    transactionId: string;
+    fromAccount: string;
+    toAccount: string;
+  } | null>(null);
+  
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
 
@@ -42,6 +52,7 @@ function WalletScreen() {
   const { getMultiCurrencyBalance } = useHederaOperations();
   const { generateQuote } = useQuote();
   const accountId = useMemo(() => selectedAccount?.account_id, [selectedAccount?.account_id]);
+  const accountAlias = useMemo(() => selectedAccount?.alias, [selectedAccount?.alias]);
 
   // Fetch transaction history for the selected account
   const {
@@ -76,7 +87,7 @@ function WalletScreen() {
       const balance = await getMultiCurrencyBalance(selectedAccount.account_id);
       if (balance && balance.balances && balance.balances.length > 0) {
         // Find the balance for the account's currency from the database
-        const accountCurrency = selectedAccount.currency || 'HBAR';
+        const accountCurrency = selectedAccount.currency || 'ZAR';
         const currencyBalance = balance.balances.find(b => b.code === accountCurrency);
         
         if (currencyBalance) {
@@ -180,7 +191,7 @@ function WalletScreen() {
 
   
   const cardNumber = '4532 1234 5678 9012';
-  const holderName = mode === 'business' ? 'Mama Thandi' : 'Nomsa Khumalo';
+  const holderName = selectedAccount?.alias!;
   const expiryDate = '12/28';
 
 
@@ -315,6 +326,7 @@ function WalletScreen() {
               };
 
               const getTransactionIconType = () => {
+                console.log(transaction.fromAlias, accountAlias);
                 switch (transaction.type) {
                   case 'SEND':
                     return 'sent';
@@ -322,8 +334,13 @@ function WalletScreen() {
                     return 'received';
                   case 'BURN':
                     return 'burn';
-                  default:
-                    return 'sent';
+                  default: {
+                    if(transaction.fromAlias !== accountAlias) {
+                      return 'sent';
+                    } else {
+                      return 'received';
+                    }
+                  }
                 }
               };
 
@@ -353,8 +370,41 @@ function WalletScreen() {
                 }
               };
 
+              // Get the actual account IDs from the transaction
+              // The backend sets these correctly: 
+              // - For receives: from = sender account, to = current account
+              // - For sends: from = current account, to = recipient account
+              const fromAccountId = transaction.from || '';
+              const toAccountId = transaction.to || '';
+              
+              // Debug: Log if accounts are the same (shouldn't happen normally)
+              if (fromAccountId === toAccountId && fromAccountId !== '') {
+                console.warn('Transaction has same from/to accounts:', {
+                  transactionId: transaction.transactionId,
+                  fromAccount: fromAccountId,
+                  toAccount: toAccountId,
+                  type: transaction.type,
+                });
+              }
+              
               return (
-                <TouchableOpacity key={`tx-${transaction.transactionId}`} style={styles.transactionItem}>
+                <TouchableOpacity 
+                  key={`tx-${transaction.transactionId}=${Math.random()}`} 
+                  style={styles.transactionItem}
+                  onPress={() => {
+                    console.log('Transaction details:', {
+                      transactionId: transaction.transactionId,
+                      fromAccount: fromAccountId,
+                      toAccount: toAccountId,
+                      type: transaction.type,
+                    });
+                    setSelectedTransaction({
+                      transactionId: transaction.transactionId,
+                      fromAccount: fromAccountId,
+                      toAccount: toAccountId,
+                    });
+                  }}
+                >
                   <View style={styles.transactionIcon}>
                     {getTransactionIcon(getTransactionIconType())}
                   </View>
@@ -371,7 +421,7 @@ function WalletScreen() {
                       styles.transactionAmountText,
                       { color: getAmountColor() }
                     ]}>
-                      {getAmountPrefix()}{displayAmount.toFixed(2)} {displayCurrency}
+                      {getAmountPrefix()}{(displayAmount/100).toFixed(2)} {displayCurrency}
                     </Text>
                     <View style={[
                       styles.statusDot,
@@ -387,16 +437,6 @@ function WalletScreen() {
               <Text style={styles.emptySubtext}>Your transaction history will appear here</Text>
             </View>
           )}
-        </View>
-
-        <View style={styles.features}>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureTitle}>Use anywhere Mastercard is accepted</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Text style={styles.featureEmoji}>⚡</Text>
-            <Text style={styles.featureTitle}>Instant top-ups from your Direla balance</Text>
-          </View>
         </View>
 
         <AppleWalletModal 
@@ -446,6 +486,15 @@ function WalletScreen() {
             setShowWithdrawModal(false);
           }}
         />
+        
+        {/* Transaction Details Modal */}
+        <SaleDetailsModal
+          visible={selectedTransaction !== null}
+          onClose={() => setSelectedTransaction(null)}
+          transactionId={selectedTransaction?.transactionId || ''}
+          fromAccount={selectedTransaction?.fromAccount || ''}
+          toAccount={selectedTransaction?.toAccount || ''}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -456,7 +505,7 @@ export default React.memo(WalletScreen);
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7', // iOS-like light gray (same as other pages)
+    backgroundColor: Colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -476,26 +525,26 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
   },
   buttonRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   refreshButton: {
-    backgroundColor: '#0C7C59',
+    backgroundColor: Colors.semantic.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
   refreshButtonText: {
-    color: '#FFFFFF',
+    color: Colors.utility.white,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -512,7 +561,7 @@ const styles = StyleSheet.create({
   },
   balanceToggleText: {
     marginLeft: 8,
-    color: '#7F8C8D',
+    color: Colors.semantic.textSecondary,
     fontSize: 14,
   },
   quickActions: {
@@ -523,7 +572,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 15,
   },
   actionsGrid: {
@@ -533,11 +582,11 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     padding: 12,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -547,7 +596,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -555,7 +604,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
   },
   features: {
     paddingHorizontal: 20,

@@ -364,6 +364,14 @@ export default function PayScreen() {
     }
   };
 
+  const getEffectiveStatus = (offer: BNPLTerms) => {
+    // If the offer has expired, override the status to EXPIRED
+    if (offer.status === 'PENDING' && offer.expiresAt <= Date.now()) {
+      return 'EXPIRED';
+    }
+    return offer.status;
+  };
+
   const getStatusColor = (status: BNPLTerms['status']) => {
     switch (status) {
       case 'PENDING':
@@ -993,7 +1001,7 @@ export default function PayScreen() {
                 styles.tabOptionText,
                 activeTab === 'send' && styles.tabOptionTextActive
               ]}>
-                Send Payment
+                Send
               </Text>
             </TouchableOpacity>
             
@@ -1009,7 +1017,7 @@ export default function PayScreen() {
                 styles.tabOptionText,
                 activeTab === 'receive' && styles.tabOptionTextActive
               ]}>
-                Request Payment
+                Receive
               </Text>
             </TouchableOpacity>
             
@@ -1025,7 +1033,7 @@ export default function PayScreen() {
                 styles.tabOptionText,
                 activeTab === 'bnpl' && styles.tabOptionTextActive
               ]}>
-                BNPL Offers
+                Credit
               </Text>
             </TouchableOpacity>
           </View>
@@ -1095,40 +1103,7 @@ export default function PayScreen() {
                 />
               </View>
             )}
-
-            {/* Nearby Merchants */}
-            <View style={styles.merchantsContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Nearby Merchants on Direla</Text>
-                <TouchableOpacity>
-                  <MapPin size={20} color="#0C7C59" />
-                </TouchableOpacity>
-              </View>
-              {nearbyMerchants.map((merchant) => (
-                <TouchableOpacity key={merchant.id} style={styles.merchantItem}>
-                  <View style={styles.merchantIcon}>
-                    <ShoppingCart size={20} color="#0C7C59" />
-                  </View>
-                  <View style={styles.merchantInfo}>
-                    <Text style={styles.merchantName}>{merchant.name}</Text>
-                    <Text style={styles.merchantCategory}>
-                      {merchant.category} • {merchant.distance} • ⭐ {merchant.rating}
-                    </Text>
-                  </View>
-                  <ArrowRight size={16} color="#BDC3C7" />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Bill Splitting Feature */}
-            <View style={styles.billSplitContainer}>
-              <TouchableOpacity style={styles.billSplitButton}>
-                <Users size={20} color="#9B59B6" />
-                <Text style={styles.billSplitText}>Split Bill with Friends</Text>
-                <ArrowRight size={16} color="#9B59B6" />
-              </TouchableOpacity>
-            </View>
-
+            
             {/* Payment Button */}
             <TouchableOpacity 
               style={[styles.payButton, isProcessingPayment && styles.payButtonProcessing]} 
@@ -1265,16 +1240,18 @@ export default function PayScreen() {
               </View>
             ) : (
               <View style={styles.offersList}>
-                {bnplOffers.map((offer) => (
+                {bnplOffers.map((offer) => {
+                  const effectiveStatus = getEffectiveStatus(offer);
+                  return (
                   <View key={offer.id} style={styles.offerCard}>
                     <View style={styles.offerHeader}>
                       <View style={styles.statusContainer}>
-                        {getStatusIcon(offer.status)}
-                        <Text style={[styles.statusText, { color: getStatusColor(offer.status) }]}>
-                          {offer.status}
+                        {getStatusIcon(effectiveStatus)}
+                        <Text style={[styles.statusText, { color: getStatusColor(effectiveStatus) }]}>
+                          {effectiveStatus}
                         </Text>
                       </View>
-                      {offer.status === 'PENDING' && (
+                      {effectiveStatus === 'PENDING' && (
                         <Text style={styles.timeRemaining}>
                           {formatTimeRemaining(offer.expiresAt)}
                         </Text>
@@ -1286,14 +1263,9 @@ export default function PayScreen() {
                         <Text style={styles.amountLabel}>Total Amount</Text>
                         <View style={styles.amountContainer}>
                           {convertedOffers.has(offer.id) ? (
-                            <>
-                              <Text style={styles.amountValue}>
-                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalAmount, convertedOffers.get(offer.id)!.currency)}
-                              </Text>
-                              <Text style={styles.originalAmount}>
-                                {formatCurrency(offer.totalAmount, offer.currency)}
-                              </Text>
-                            </>
+                            <Text style={styles.amountValue}>
+                              ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalAmount, convertedOffers.get(offer.id)!.currency)}
+                            </Text>
                           ) : (
                             <Text style={styles.amountValue}>
                               {formatCurrency(offer.totalAmount, offer.currency)}
@@ -1306,14 +1278,9 @@ export default function PayScreen() {
                         <Text style={styles.amountLabel}>Interest ({offer.interestRate}%)</Text>
                         <View style={styles.amountContainer}>
                           {convertedOffers.has(offer.id) ? (
-                            <>
-                              <Text style={styles.amountValue}>
-                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalInterest, convertedOffers.get(offer.id)!.currency)}
-                              </Text>
-                              <Text style={styles.originalAmount}>
-                                {formatCurrency(offer.totalInterest, offer.currency)}
-                              </Text>
-                            </>
+                            <Text style={styles.amountValue}>
+                              ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalInterest, convertedOffers.get(offer.id)!.currency)}
+                            </Text>
                           ) : (
                             <Text style={styles.amountValue}>
                               {formatCurrency(offer.totalInterest, offer.currency)}
@@ -1326,14 +1293,9 @@ export default function PayScreen() {
                         <Text style={styles.amountLabel}>Total with Interest</Text>
                         <View style={styles.amountContainer}>
                           {convertedOffers.has(offer.id) ? (
-                            <>
-                              <Text style={[styles.amountValue, styles.totalAmount]}>
-                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalAmountWithInterest, convertedOffers.get(offer.id)!.currency)}
-                              </Text>
-                              <Text style={styles.originalAmount}>
-                                {formatCurrency(offer.totalAmountWithInterest, offer.currency)}
-                              </Text>
-                            </>
+                            <Text style={[styles.amountValue, styles.totalAmount]}>
+                              ≈ {formatCurrency(convertedOffers.get(offer.id)!.totalAmountWithInterest, convertedOffers.get(offer.id)!.currency)}
+                            </Text>
                           ) : (
                             <Text style={[styles.amountValue, styles.totalAmount]}>
                               {formatCurrency(offer.totalAmountWithInterest, offer.currency)}
@@ -1348,14 +1310,9 @@ export default function PayScreen() {
                         </Text>
                         <View style={styles.amountContainer}>
                           {convertedOffers.has(offer.id) ? (
-                            <>
-                              <Text style={styles.installmentAmount}>
-                                ≈ {formatCurrency(convertedOffers.get(offer.id)!.installmentAmount, convertedOffers.get(offer.id)!.currency)} each
-                              </Text>
-                              <Text style={styles.originalAmount}>
-                                {formatCurrency(offer.installmentAmount, offer.currency)} each
-                              </Text>
-                            </>
+                            <Text style={styles.installmentAmount}>
+                              ≈ {formatCurrency(convertedOffers.get(offer.id)!.installmentAmount, convertedOffers.get(offer.id)!.currency)} each
+                            </Text>
                           ) : (
                             <Text style={styles.installmentAmount}>
                               {formatCurrency(offer.installmentAmount, offer.currency)} each
@@ -1375,7 +1332,7 @@ export default function PayScreen() {
                       </View>
                     </View>
 
-                    {offer.status === 'ACCEPTED' && (
+                    {effectiveStatus === 'ACCEPTED' && (
                       <View style={styles.acceptedContainer}>
                         <CheckCircle2 size={24} color="#27AE60" />
                         <Text style={styles.acceptedText}>
@@ -1384,16 +1341,17 @@ export default function PayScreen() {
                       </View>
                     )}
 
-                    {(offer.status === 'REJECTED' || offer.status === 'EXPIRED') && (
+                    {(effectiveStatus === 'REJECTED' || effectiveStatus === 'EXPIRED') && (
                       <View style={styles.rejectedContainer}>
                         <XCircle size={24} color="#E74C3C" />
                         <Text style={styles.rejectedText}>
-                          {offer.status === 'REJECTED' ? 'Terms were rejected by merchant.' : 'Terms have expired.'}
+                          {effectiveStatus === 'REJECTED' ? 'Terms were rejected by merchant.' : 'Terms have expired.'}
                         </Text>
                       </View>
                     )}
                   </View>
-                ))}
+                  );
+                })}
               </View>
             )}
           </ScrollView>
@@ -1975,7 +1933,7 @@ const styles = StyleSheet.create({
   // BNPL Styles
   bnplContainer: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   bnplHeader: {
     flexDirection: 'row',
@@ -2026,12 +1984,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   offersList: {
-    gap: 16,
+    gap: 12,
   },
   offerCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -2042,7 +2000,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -2061,15 +2019,15 @@ const styles = StyleSheet.create({
   },
   offerDetails: {
     backgroundColor: '#F8F9FA',
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   amountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   amountLabel: {
     fontSize: 14,
@@ -2094,8 +2052,8 @@ const styles = StyleSheet.create({
     color: '#0C7C59',
   },
   installmentDetails: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#E5E5E5',
     alignItems: 'center',
@@ -2112,8 +2070,8 @@ const styles = StyleSheet.create({
     color: '#0C7C59',
   },
   bnplMerchantInfo: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#E5E5E5',
   },
@@ -2145,7 +2103,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F0FDF4',
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     gap: 12,
   },
@@ -2159,7 +2117,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF2F2',
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     gap: 12,
   },

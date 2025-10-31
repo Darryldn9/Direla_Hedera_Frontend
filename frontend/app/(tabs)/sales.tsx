@@ -23,6 +23,8 @@ import { useAccount } from '../../contexts/AccountContext';
 import { useCachedTransactions } from '../../hooks/useCachedTransactions';
 import { TransactionHistoryItem } from '../../types/api';
 import PageHeader from '../../components/PageHeader';
+import SaleDetailsModal from '../../components/SaleDetailsModal';
+import { Colors } from '../../lib/colors';
 
 export default function SalesScreen() {
   const insets = useSafeAreaInsets();
@@ -31,6 +33,13 @@ export default function SalesScreen() {
   // State for showing more transactions
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(10);
+  
+  // State for sale details modal
+  const [selectedSale, setSelectedSale] = useState<{
+    transactionId: string;
+    fromAccount: string;
+    toAccount: string;
+  } | null>(null);
   
   // Get cached transaction history for the selected account
   let { 
@@ -85,11 +94,14 @@ export default function SalesScreen() {
       id: tx.transactionId,
       type: 'Sale', // All incoming transactions are sales
       status: 'Completed', // All transactions from Hedera are completed
-      amount: tx.amount, // Incoming transactions are always positive
+      amount: tx.amount / 100, // Incoming transactions are always positive
       icon: 'sale',
       timestamp: tx.time,
       from: tx.fromAlias || tx.from,
       to: tx.toAlias || tx.to,
+      fromAccount: tx.from, // Store actual account ID
+      toAccount: tx.to, // Store actual account ID
+      transactionId: tx.transactionId, // Store transaction ID
       gasFee: tx.gasFee,
       currency: tx.currency
     }));
@@ -123,16 +135,11 @@ export default function SalesScreen() {
   };
 
   const handleTransactionPress = (transaction: any) => {
-    const date = new Date(transaction.timestamp).toLocaleString();
-    Alert.alert(
-      'Transaction Details', 
-      `${transaction.type} - ${transaction.status}\n` +
-      `Amount: ${transaction.currency} ${Math.abs(transaction.amount).toFixed(2)}\n` +
-      `From: ${transaction.from}\n` +
-      `To: ${transaction.to}\n` +
-      `Date: ${date}\n` +
-      `Gas Fee: ${transaction.currency} ${transaction.gasFee.toFixed(2)}`
-    );
+    setSelectedSale({
+      transactionId: transaction.transactionId,
+      fromAccount: transaction.fromAccount,
+      toAccount: transaction.toAccount,
+    });
   };
 
   const formatDate = (timestamp: number) => {
@@ -162,7 +169,7 @@ export default function SalesScreen() {
         <PageHeader />
 
         {/* Revenue Display */}
-        <View style={styles.revenueContainer}>
+        {/* <View style={styles.revenueContainer}>
           <Text style={styles.periodText}>Last 7 days</Text>
           <Text style={styles.revenueAmount}>
             {isLoadingRevenue || isLoadingTransactions ? '...' : `${selectedAccount?.currency} ${last7DaysRevenue.toFixed(2)}`}
@@ -171,7 +178,7 @@ export default function SalesScreen() {
             {isLoadingRevenue || isLoadingTransactions ? 'Loading revenue...' : 
              revenueError ? 'Error loading revenue' : motivationalText}
           </Text>
-        </View>
+        </View> */}
 
         {/* Action Buttons */}
         {/* <View style={styles.actionButtonsContainer}>
@@ -280,25 +287,14 @@ export default function SalesScreen() {
           )}
         </View>
 
-        {/* Invoices Section */}
-        <View style={styles.invoicesSection}>
-          <Text style={styles.sectionTitle}>Invoices</Text>
-          
-          {invoices.map((invoice) => (
-            <TouchableOpacity
-              key={invoice.id}
-              style={styles.invoiceItem}
-              onPress={() => handleInvoicePress(invoice)}
-            >
-              <View style={styles.invoiceLeft}>
-                <View style={styles.invoiceIcon}>
-                  <FileEdit size={16} color="#8E8E93" />
-                </View>
-                <Text style={styles.invoiceTitle}>{invoice.title}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Sale Details Modal */}
+        <SaleDetailsModal
+          visible={selectedSale !== null}
+          onClose={() => setSelectedSale(null)}
+          transactionId={selectedSale?.transactionId || ''}
+          fromAccount={selectedSale?.fromAccount || ''}
+          toAccount={selectedSale?.toAccount || ''}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -307,7 +303,7 @@ export default function SalesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7', // iOS-like light gray (same as Hub)
+    backgroundColor: Colors.semantic.background,
   },
   scrollView: {
     flex: 1,
@@ -316,24 +312,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 30,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: Colors.semantic.background,
   },
   periodText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
     marginBottom: 8,
   },
   revenueAmount: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
     marginBottom: 8,
   },
   motivationalText: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#8E8E93',
+    color: Colors.semantic.textSecondary,
     textAlign: 'center',
   },
   actionButtonsContainer: {
@@ -347,7 +343,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: Colors.semantic.textPrimary,
     paddingVertical: 16,
     paddingHorizontal: 12,
     borderRadius: 16,
@@ -356,7 +352,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.utility.white,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -364,19 +360,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: Colors.semantic.background,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: Colors.semantic.textPrimary,
   },
   transactionContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     marginHorizontal: 20,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,

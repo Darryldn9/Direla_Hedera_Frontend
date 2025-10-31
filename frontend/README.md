@@ -255,13 +255,16 @@ project-root/
 ## 🎨 **Design System**
 
 ### **Color Palette**
-- **Primary Green**: `#0C7C59` - Main brand color
-- **Background**: `#F5F5F7` - iOS-style light gray
-- **Text Primary**: `#1C1C1E` - High contrast text
-- **Text Secondary**: `#8E8E93` - Subtle text
-- **Success**: `#0C7C59` - Positive actions
-- **Warning**: `#F1C40F` - Caution states
+- **Primary Green**: `#006A4E` - Main brand color
+- **Accent Yellow**: `#FFD403` - Secondary brand color
+- **Light Grey**: `#F6F6F6` - Background color (instead of white)
+- **Dark Grey**: `#1E1E1E` - Primary text color (instead of black)
+- **Success**: `#006A4E` - Positive actions (brand green)
+- **Warning**: `#FFD403` - Caution states (brand yellow)
 - **Error**: `#FF3B30` - Error states
+- **Info**: `#007AFF` - Information states
+
+**Usage**: Import colors from `lib/colors.ts` for consistent theming across the app.
 
 ### **Typography**
 - **Headers**: 32px bold for page titles

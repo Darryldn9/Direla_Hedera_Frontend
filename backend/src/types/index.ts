@@ -45,6 +45,7 @@ export interface CreateHederaAccountRequest {
 export interface UpdateHederaAccountRequest {
   alias?: string;
   is_active?: boolean;
+  currency?: string;
 }
 
 export interface PaymentRequest {

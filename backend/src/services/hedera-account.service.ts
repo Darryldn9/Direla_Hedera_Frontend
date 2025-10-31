@@ -205,6 +205,10 @@ export class HederaAccountServiceImpl implements HederaAccountService {
         updateData.is_active = data.is_active;
       }
 
+      if (data.currency !== undefined) {
+        updateData.currency = data.currency;
+      }
+
       const { data: updatedAccount, error } = await supabase
         .from(TABLES.HEDERA_ACCOUNTS)
         .update(updateData as any)
@@ -228,7 +232,8 @@ export class HederaAccountServiceImpl implements HederaAccountService {
         data: { 
           account_id: (updatedAccount as any).account_id, 
           alias: data.alias, 
-          is_active: data.is_active 
+          is_active: data.is_active,
+          currency: data.currency
         }
       });
 

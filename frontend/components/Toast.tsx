@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors } from '../lib/colors';
 
 interface ToastProps {
   toast: {
@@ -74,32 +75,32 @@ export function Toast({ toast, onHide }: ToastProps) {
     switch (toast.type) {
       case 'success':
         return {
-          backgroundColor: '#0C7C59',
-          icon: <CheckCircle size={20} color="#FFFFFF" />,
-          borderColor: '#0A5D47',
+          backgroundColor: Colors.semantic.success,
+          icon: <CheckCircle size={20} color={Colors.utility.white} />,
+          borderColor: Colors.brand.green,
         };
       case 'error':
         return {
-          backgroundColor: '#E74C3C',
-          icon: <AlertCircle size={20} color="#FFFFFF" />,
+          backgroundColor: Colors.semantic.error,
+          icon: <AlertCircle size={20} color={Colors.utility.white} />,
           borderColor: '#C0392B',
         };
       case 'warning':
         return {
-          backgroundColor: '#F39C12',
-          icon: <AlertTriangle size={20} color="#FFFFFF" />,
+          backgroundColor: Colors.semantic.warning,
+          icon: <AlertTriangle size={20} color={Colors.utility.white} />,
           borderColor: '#E67E22',
         };
       case 'info':
         return {
-          backgroundColor: '#3498DB',
-          icon: <Info size={20} color="#FFFFFF" />,
+          backgroundColor: Colors.semantic.info,
+          icon: <Info size={20} color={Colors.utility.white} />,
           borderColor: '#2980B9',
         };
       default:
         return {
-          backgroundColor: '#3498DB',
-          icon: <Info size={20} color="#FFFFFF" />,
+          backgroundColor: Colors.semantic.info,
+          icon: <Info size={20} color={Colors.utility.white} />,
           borderColor: '#2980B9',
         };
     }
@@ -134,7 +135,7 @@ export function Toast({ toast, onHide }: ToastProps) {
             onPress={handleHide}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <X size={16} color="#FFFFFF" />
+            <X size={16} color={Colors.utility.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
   toast: {
     borderRadius: 12,
     borderWidth: 1,
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -176,13 +177,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: Colors.utility.white,
     marginBottom: 2,
   },
   message: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#FFFFFF',
+    color: Colors.utility.white,
     opacity: 0.9,
     lineHeight: 20,
   },

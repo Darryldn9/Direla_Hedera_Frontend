@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import NfcManager, { NfcTech, Ndef } from 'react-native-nfc-manager';
+import { useState, useEffect, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 
 export interface NFCPaymentData {
@@ -19,33 +18,43 @@ export function useNFC() {
   const [isNFCSupported, setIsNFCSupported] = useState(false);
   const [isNFCEnabled, setIsNFCEnabled] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const NfcManagerRef = useRef<any | null>(null);
+  const NdefRef = useRef<any | null>(null);
+  const NfcTechRef = useRef<any | null>(null);
 
   useEffect(() => {
     async function checkNFC() {
-      if (Platform.OS === 'ios') {
-        try {
-          const supported = await NfcManager.isSupported();
-          console.log('NFC Supported:', supported);
-          setIsNFCSupported(supported);
+      try {
+        // const nfcModule = await import('react-native-nfc-manager');
+        // NfcManagerRef.current = nfcModule.default;
+        // NdefRef.current = nfcModule.Ndef;
+        // NfcTechRef.current = nfcModule.NfcTech;
 
-          if (supported) {
-            await NfcManager.start();
-            console.log('NFC Manager started');
-            const enabled = await NfcManager.isEnabled();
-            console.log('NFC Enabled:', enabled);
-            setIsNFCEnabled(enabled);
-          }
-        } catch (error) {
-          console.error('NFC check error:', error);
-          setIsNFCSupported(false);
-        }
+        // const supported = await NfcManagerRef.current.isSupported();
+        // console.log('NFC Supported:', supported);
+        // setIsNFCSupported(supported);
+
+        // if (supported) {
+        //   await NfcManagerRef.current.start();
+        //   console.log('NFC Manager started');
+        //   const enabled = await NfcManagerRef.current.isEnabled();
+        //   console.log('NFC Enabled:', enabled);
+        //   setIsNFCEnabled(enabled);
+        // }
+      } catch (error) {
+        // This commonly happens in Expo Go where the native module isn't available
+        console.warn('NFC module unavailable; NFC features disabled. Details:', error);
+        setIsNFCSupported(false);
+        setIsNFCEnabled(false);
       }
     }
 
     checkNFC();
 
     return () => {
-      NfcManager.cancelTechnologyRequest().catch(() => {});
+      if (NfcManagerRef.current) {
+        NfcManagerRef.current.cancelTechnologyRequest().catch(() => {});
+      }
     };
   }, []);
 
@@ -54,7 +63,7 @@ export function useNFC() {
     onSuccess: () => void,
     onError: (error: string) => void
   ) => {
-    if (!isNFCSupported) {
+    if (!isNFCSupported || !NfcManagerRef.current || !NdefRef.current || !NfcTechRef.current) {
       Alert.alert('NFC Not Supported', 'Your device does not support NFC writing.');
       return;
     }
@@ -77,7 +86,7 @@ export function useNFC() {
       console.log('Payment data to write:', paymentData);
 
       // Request NFC technology for writing
-      await NfcManager.requestTechnology(NfcTech.Ndef, {
+      await NfcManagerRef.current.requestTechnology(NfcTechRef.current.Ndef, {
         alertMessage: 'Hold your iPhone near a writable NFC tag to write payment request',
       });
 
@@ -88,21 +97,23 @@ export function useNFC() {
       console.log('JSON payload length:', paymentJson.length);
 
       // Create NDEF text record with proper byte array conversion
-      const bytes = Ndef.encodeMessage([Ndef.textRecord(paymentJson)]);
+      const bytes = NdefRef.current.encodeMessage([NdefRef.current.textRecord(paymentJson)]);
       console.log('NDEF record created');
 
       // Write to tag
-      await NfcManager.ndefHandler.writeNdefMessage(bytes);
+      await NfcManagerRef.current.ndefHandler.writeNdefMessage(bytes);
       console.log('Write successful!');
 
-      await NfcManager.cancelTechnologyRequest();
+      await NfcManagerRef.current.cancelTechnologyRequest();
       setIsScanning(false);
       onSuccess();
     } catch (error: any) {
       console.error('NFC write error:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
       
-      await NfcManager.cancelTechnologyRequest().catch(() => {});
+      if (NfcManagerRef.current) {
+        await NfcManagerRef.current.cancelTechnologyRequest().catch(() => {});
+      }
       setIsScanning(false);
 
       if (error.message?.includes('cancelled') || error.message?.includes('Session')) {
@@ -116,7 +127,9 @@ export function useNFC() {
 
   const cancelNFCScan = async () => {
     try {
-      await NfcManager.cancelTechnologyRequest();
+      if (NfcManagerRef.current) {
+        await NfcManagerRef.current.cancelTechnologyRequest();
+      }
       setIsScanning(false);
       console.log('NFC session cancelled');
     } catch (error) {

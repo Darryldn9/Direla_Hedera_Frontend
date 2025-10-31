@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useAppMode } from '../contexts/AppContext';
+import { useAccount } from '../contexts/AccountContext';
 import { Bell } from 'lucide-react-native';
 import NotificationModal from './NotificationModal';
 
@@ -13,29 +14,52 @@ interface PageHeaderProps {
 }
 
 export default function PageHeader({
-  businessName = "Mama Thandi's Spaza Shop",
-  personalName = "Nomsa Khumalo",
-  userInitials = "NK",
-  businessInitials = "MT"
+  businessName = "",
+  personalName = "",
+  userInitials = "",
+  businessInitials = ""
 }: PageHeaderProps) {
   const { mode } = useAppMode();
+  const { selectedAccount } = useAccount();
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // Get display name and initials from selected account
+  const getDisplayName = () => {
+    if (selectedAccount?.alias) {
+      return selectedAccount.alias;
+    }
+    return mode === 'business' ? businessName : personalName;
+  };
+
+  const getDisplayInitials = () => {
+    if (selectedAccount?.alias) {
+      // Extract initials from alias (first letter of each word)
+      return selectedAccount.alias
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase())
+        .join('')
+        .substring(0, 2); // Limit to 2 characters
+    }
+    return mode === 'business' ? businessInitials : userInitials;
+  };
 
   return (
     <View style={styles.header}>
       <View style={styles.userAvatar}>
         <Text style={styles.avatarText}>
-          {mode === 'business' ? businessInitials : userInitials}
+          {getDisplayInitials()}
         </Text>
       </View>
-      <View style={styles.businessBadge}>
-        <Text style={styles.businessBadgeText}>
-          {mode === 'business' ? businessName : personalName}
-        </Text>
+      <View style={styles.rightSection}>
+        <View style={styles.businessBadge}>
+          <Text style={styles.businessBadgeText}>
+            {getDisplayName()}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => setShowNotifications(true)} style={styles.bellButton}>
+          <Bell size={22} color="#1C1C1E" />
+        </TouchableOpacity>
       </View>
-      <TouchableOpacity onPress={() => setShowNotifications(true)} style={styles.bellButton}>
-        <Bell size={22} color="#1C1C1E" />
-      </TouchableOpacity>
       <NotificationModal visible={showNotifications} onClose={() => setShowNotifications(false)} />
     </View>
   );
@@ -64,6 +88,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  rightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   businessBadge: {
     backgroundColor: '#E8E8EA',
     paddingHorizontal: 16,
@@ -71,7 +100,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   bellButton: {
-    marginLeft: 12,
     padding: 6,
     borderRadius: 16,
   },

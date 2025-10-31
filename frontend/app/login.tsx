@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useAppMode } from '../contexts/AppContext';
 import { useUserManagement } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
+import { Colors } from '../lib/colors';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -196,7 +197,7 @@ export default function LoginScreen() {
             style={[styles.loginMethodButton, loginMethod === 'email' && styles.loginMethodButtonActive]}
             onPress={() => setLoginMethod('email')}
           >
-            <User size={20} color={loginMethod === 'email' ? '#FFFFFF' : '#8E8E93'} />
+            <User size={20} color={loginMethod === 'email' ? Colors.utility.white : Colors.semantic.textSecondary} />
             <Text style={[styles.loginMethodText, loginMethod === 'email' && styles.loginMethodTextActive]}>
               Email
             </Text>
@@ -205,7 +206,7 @@ export default function LoginScreen() {
             style={[styles.loginMethodButton, loginMethod === 'phone' && styles.loginMethodButtonActive]}
             onPress={() => setLoginMethod('phone')}
           >
-            <Smartphone size={20} color={loginMethod === 'phone' ? '#FFFFFF' : '#8E8E93'} />
+            <Smartphone size={20} color={loginMethod === 'phone' ? Colors.utility.white : Colors.semantic.textSecondary} />
             <Text style={[styles.loginMethodText, loginMethod === 'phone' && styles.loginMethodTextActive]}>
               Phone
             </Text>
@@ -220,14 +221,14 @@ export default function LoginScreen() {
             </Text>
             <View style={[styles.inputWrapper, errors.email && styles.inputWrapperError]}>
               {loginMethod === 'email' ? (
-                <Mail size={20} color={errors.email ? "#E74C3C" : "#8E8E93"} style={styles.inputIcon} />
+                <Mail size={20} color={errors.email ? Colors.semantic.error : Colors.semantic.textSecondary} style={styles.inputIcon} />
               ) : (
-                <Smartphone size={20} color={errors.email ? "#E74C3C" : "#8E8E93"} style={styles.inputIcon} />
+                <Smartphone size={20} color={errors.email ? Colors.semantic.error : Colors.semantic.textSecondary} style={styles.inputIcon} />
               )}
               <TextInput
                 style={styles.textInput}
                 placeholder={loginMethod === 'email' ? 'Enter your email' : 'Enter your phone number'}
-                placeholderTextColor="#8E8E93"
+                placeholderTextColor={Colors.semantic.textSecondary}
                 value={email}
                 onChangeText={(text) => {
                   setEmail(text);
@@ -246,11 +247,11 @@ export default function LoginScreen() {
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Password</Text>
             <View style={[styles.inputWrapper, errors.password && styles.inputWrapperError]}>
-              <Lock size={20} color={errors.password ? "#E74C3C" : "#8E8E93"} style={styles.inputIcon} />
+              <Lock size={20} color={errors.password ? Colors.semantic.error : Colors.semantic.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.textInput}
                 placeholder="Enter your password"
-                placeholderTextColor="#8E8E93"
+                placeholderTextColor={Colors.semantic.textSecondary}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);
@@ -267,9 +268,9 @@ export default function LoginScreen() {
                 onPress={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? (
-                  <EyeOff size={20} color="#8E8E93" />
+                  <EyeOff size={20} color={Colors.semantic.textSecondary} />
                 ) : (
-                  <Eye size={20} color="#8E8E93" />
+                  <Eye size={20} color={Colors.semantic.textSecondary} />
                 )}
               </TouchableOpacity>
             </View>
@@ -359,7 +360,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: Colors.semantic.background,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -377,16 +378,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 20,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: Colors.semantic.background,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.semantic.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.semantic.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,

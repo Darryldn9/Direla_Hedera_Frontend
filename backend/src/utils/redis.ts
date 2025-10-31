@@ -23,19 +23,9 @@ export function getRedisClient(): RedisClientType {
 }
 
 export async function cacheGet<T>(key: string): Promise<T | null> {
-  try {
-    const redis = getRedisClient();
-    const raw = await redis.get(key);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return raw as unknown as T;
-    }
-  } catch (error) {
-    logger.warn('Redis GET failed, bypassing cache', { key, error });
-    return null;
-  }
+  // Globally disable cache reads: always behave as a miss
+  logger.debug?.('Cache read bypassed (reads disabled)', { key });
+  return null;
 }
 
 export async function cacheSet<T>(key: string, value: T, ttlSeconds: number = config.redis.ttlSeconds): Promise<void> {

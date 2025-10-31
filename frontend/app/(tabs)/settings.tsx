@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -19,9 +18,14 @@ import PaymentMethodsModal from '../../components/PaymentMethodsModal';
 import TransactionHistoryModal from '../../components/TransactionHistoryModal';
 import PinChangeModal from '../../components/PinChangeModal';
 import PrivacySettingsModal from '../../components/PrivacySettingsModal';
+import CurrencySwitchModal from '../../components/CurrencySwitchModal';
 import AccountDropdown from '../../components/AccountDropdown';
 import PageHeader from '../../components/PageHeader';
 import { useAccount } from '../../contexts/AccountContext';
+import { formatCurrency, getCurrencyInfo } from '../../utils/currency';
+import React, { useState, useEffect } from 'react';
+import { HederaService } from '../../services/api/hedera.service';
+import { CurrencyBalance } from '../../types/api';
 
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -35,12 +39,54 @@ export default function SettingsScreen() {
   const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const [showPinChange, setShowPinChange] = useState(false);
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
+  const [showCurrencySwitch, setShowCurrencySwitch] = useState(false);
+  
+  // Currency balance state
+  const [currencyBalances, setCurrencyBalances] = useState<CurrencyBalance[]>([]);
+  const [loadingBalances, setLoadingBalances] = useState(false);
+  const hederaService = new HederaService();
   
   const { mode, setMode } = useAppMode();
   const { logout } = useUserManagement();
   const { selectedAccount, accounts, isLoading: accountsLoading } = useAccount();
   const { kycData } = useKYC();
   const insets = useSafeAreaInsets();
+
+  // Fetch currency balances for the selected account
+  const fetchCurrencyBalances = async () => {
+    if (!selectedAccount?.account_id) {
+      setCurrencyBalances([]);
+      return;
+    }
+
+    setLoadingBalances(true);
+    try {
+      const response = await hederaService.getAccountBalance(selectedAccount.account_id);
+      if (response.success && response.data) {
+        setCurrencyBalances(response.data.balances);
+      } else {
+        setCurrencyBalances([]);
+      }
+    } catch (error) {
+      console.error('Error fetching currency balances:', error);
+      setCurrencyBalances([]);
+    } finally {
+      setLoadingBalances(false);
+    }
+  };
+
+  // Load balances when account changes
+  useEffect(() => {
+    if (selectedAccount) {
+      fetchCurrencyBalances();
+    }
+  }, [selectedAccount?.account_id]);
+
+  // Get balance for a specific currency
+  const getBalanceForCurrency = (currency: string): number => {
+    const balance = currencyBalances.find(b => b.code === currency);
+    return balance?.amount || 0;
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -193,28 +239,20 @@ export default function SettingsScreen() {
           </View>
           
           <SettingItem
-            icon={<CreditCard size={18} color="#3498DB" />}
-            title="Payment Methods"
-            subtitle="Manage cards and bank accounts"
-            onPress={() => setShowPaymentMethods(true)}
-          />
-          <SettingItem
-            icon={<Eye size={18} color="#9B59B6" />}
-            title="Transaction History"
-            subtitle="View all your transactions"
-            onPress={() => setShowTransactionHistory(true)}
+            icon={<Globe size={18} color="#0C7C59" />}
+            title="Account Currency"
+            subtitle={
+              selectedAccount 
+                ? `${getCurrencyInfo(selectedAccount.currency).name} (${formatCurrency(getBalanceForCurrency(selectedAccount.currency), selectedAccount.currency, true)})`
+                : 'Select currency for your account'
+            }
+            onPress={() => setShowCurrencySwitch(true)}
           />
         </View>
 
         {/* Security Section */}
         <SectionHeader title="Security & Privacy" />
         <View style={styles.section}>
-          <SettingItem
-            icon={<Lock size={18} color="#E74C3C" />}
-            title="Change PIN"
-            subtitle="Update your security PIN"
-            onPress={() => setShowPinChange(true)}
-          />
           <SettingItem
             icon={<Smartphone size={18} color="#F39C12" />}
             title="Biometric Authentication"
@@ -228,72 +266,16 @@ export default function SettingsScreen() {
               />
             }
           />
-          <SettingItem
-            icon={<Shield size={18} color="#2ECC71" />}
-            title="Privacy Settings"
-            subtitle="Control data sharing and visibility"
-            onPress={() => setShowPrivacySettings(true)}
-          />
         </View>
 
         {/* Notifications Section */}
         <SectionHeader title="Notifications" />
         <View style={styles.section}>
           <SettingItem
-            icon={<Bell size={18} color="#F1C40F" />}
-            title="Push Notifications"
-            subtitle="Get notified about transactions"
-            rightElement={
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: '#E5E5E5', true: '#0C7C59' }}
-                thumbColor={notificationsEnabled ? '#FFFFFF' : '#BDC3C7'}
-              />
-            }
-          />
-          <SettingItem
             icon={<Mail size={18} color="#3498DB" />}
-            title="Email Notifications"
-            subtitle="Receive updates via email"
-            onPress={() => Alert.alert('Email', 'Email notification settings')}
-          />
-        </View>
-
-        {/* App Settings */}
-        <SectionHeader title="App Settings" />
-        <View style={styles.section}>
-          <SettingItem
-            icon={<Globe size={18} color="#16A085" />}
-            title="Language"
-            subtitle="English (South Africa)"
-            onPress={() => Alert.alert('Language', 'Language selection')}
-          />
-          <SettingItem
-            icon={<Globe size={18} color="#8E44AD" />}
-            title="Offline Mode"
-            subtitle="Allow transactions without internet"
-            rightElement={
-              <Switch
-                value={offlineMode}
-                onValueChange={setOfflineMode}
-                trackColor={{ false: '#E5E5E5', true: '#0C7C59' }}
-                thumbColor={offlineMode ? '#FFFFFF' : '#BDC3C7'}
-              />
-            }
-          />
-          <SettingItem
-            icon={<Globe size={18} color="#E67E22" />}
-            title="Auto Sync"
-            subtitle="Sync data when connected"
-            rightElement={
-              <Switch
-                value={autoSync}
-                onValueChange={setAutoSync}
-                trackColor={{ false: '#E5E5E5', true: '#0C7C59' }}
-                thumbColor={autoSync ? '#FFFFFF' : '#BDC3C7'}
-              />
-            }
+            title="WhatsApp Notifications"
+            subtitle="Receive updates via WhatsApp"
+            onPress={() => Alert.alert('WhatsApp', 'WhatsApp notification settings')}
           />
         </View>
 
@@ -318,31 +300,6 @@ export default function SettingsScreen() {
             subtitle="Read our terms and privacy policy"
             onPress={() => Alert.alert('Legal', 'Terms and privacy policy')}
           />
-        </View>
-
-        {/* Hedera Information */}
-        <View style={styles.hederaSection}>
-          <Text style={styles.hederaTitle}>⚡ Hedera Hashgraph</Text>
-          <Text style={styles.hederaDescription}>
-            Your payments are secured and processed through Hedera's enterprise-grade network:
-          </Text>
-          <View style={styles.featureList}>
-            <Text style={styles.featureItem}>• Asynchronous Byzantine Fault Tolerance (aBFT)</Text>
-            <Text style={styles.featureItem}>• Predictable low fees (under $0.01 per transaction)</Text>
-            <Text style={styles.featureItem}>• 3-5 second transaction finality</Text>
-            <Text style={styles.featureItem}>• Carbon-negative consensus mechanism</Text>
-            <Text style={styles.featureItem}>• Immutable audit trail and smart contracts</Text>
-            <Text style={styles.featureItem}>• Enterprise-grade security and governance</Text>
-          </View>
-        </View>
-
-        {/* App Information */}
-        <View style={styles.appInfo}>
-          <Text style={styles.appInfoTitle}>Direla</Text>
-          <Text style={styles.appInfoVersion}>Version 1.0.0</Text>
-          <Text style={styles.appInfoDescription}>
-            Bridging the digital-cash divide in South Africa
-          </Text>
         </View>
 
         {/* Logout Button */}
@@ -378,6 +335,14 @@ export default function SettingsScreen() {
       <PrivacySettingsModal
         visible={showPrivacySettings}
         onClose={() => setShowPrivacySettings(false)}
+      />
+      
+      <CurrencySwitchModal
+        visible={showCurrencySwitch}
+        onClose={() => setShowCurrencySwitch(false)}
+        onCurrencyChanged={(currency) => {
+          console.log('Currency changed to:', currency);
+        }}
       />
     </SafeAreaView>
   );

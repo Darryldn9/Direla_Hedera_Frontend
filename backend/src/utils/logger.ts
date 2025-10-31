@@ -21,7 +21,12 @@ const colors = {
   bgRed: '\x1b[41m',
   bgYellow: '\x1b[43m',
   bgBlue: '\x1b[44m',
-  bgGray: '\x1b[100m'
+  bgGray: '\x1b[100m',
+  // Brand colors (using closest ANSI equivalents)
+  brandGreen: '\x1b[32m',  // #006A4E -> green
+  brandYellow: '\x1b[33m', // #FFD403 -> yellow
+  brandDarkGray: '\x1b[90m', // #1E1E1E -> gray
+  brandLightGray: '\x1b[37m' // #F6F6F6 -> white
 };
 
 class Logger {

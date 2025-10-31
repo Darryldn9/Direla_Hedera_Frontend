@@ -86,27 +86,9 @@ export class RedisCachedTransactionServiceImpl implements RedisCachedTransaction
     accountId: string, 
     periodType: 'daily' | 'weekly' | 'monthly' | 'all'
   ): Promise<TransactionHistoryItem[] | null> {
-    try {
-      const key = this.getTransactionKey(accountId, periodType);
-      const data = await this.redis.get(key);
-      
-      if (!data) {
-        return null;
-      }
-
-      const transactions = JSON.parse(data) as TransactionHistoryItem[];
-      
-      logger.debug('Transactions retrieved from Redis cache', { 
-        accountId, 
-        periodType, 
-        count: transactions.length 
-      });
-      
-      return transactions;
-    } catch (error) {
-      logger.error('Failed to get cached transactions from Redis', { accountId, periodType, error });
-      return null;
-    }
+    // Disable cache reads globally: always miss
+    logger.debug('Cache read bypassed for transactions (reads disabled)', { accountId, periodType });
+    return null;
   }
 
   async getRevenueForPeriod(
@@ -115,40 +97,9 @@ export class RedisCachedTransactionServiceImpl implements RedisCachedTransaction
     startTime: number,
     endTime: number
   ): Promise<{ totalRevenue: number; transactionCount: number } | null> {
-    try {
-      // Try to get cached revenue first
-      const revenueKey = this.getRevenueKey(accountId, periodType, startTime, endTime);
-      const cachedRevenue = await this.redis.get(revenueKey);
-      
-      if (cachedRevenue) {
-        return JSON.parse(cachedRevenue);
-      }
-
-      // If not cached, calculate from transactions
-      const transactions = await this.getCachedTransactions(accountId, periodType);
-      if (!transactions) {
-        return null;
-      }
-
-      const filteredTransactions = transactions.filter(tx => 
-        tx.time >= startTime && 
-        tx.time <= endTime && 
-        tx.type === 'RECEIVE'
-      );
-
-      const totalRevenue = filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-      const transactionCount = filteredTransactions.length;
-
-      const revenue = { totalRevenue, transactionCount };
-
-      // Cache the calculated revenue for 1 minute
-      await this.redis.set(revenueKey, JSON.stringify(revenue), { EX: 60 });
-
-      return revenue;
-    } catch (error) {
-      logger.error('Failed to get revenue for period', { accountId, periodType, error });
-      return null;
-    }
+    // Disable cache reads globally: do not fetch revenue from cache
+    logger.debug('Cache read bypassed for revenue (reads disabled)', { accountId, periodType, startTime, endTime });
+    return null;
   }
 
   async clearCacheForAccount(accountId: string): Promise<void> {
@@ -206,14 +157,9 @@ export class RedisCachedTransactionServiceImpl implements RedisCachedTransaction
   }
 
   async isCacheValid(accountId: string, periodType: string): Promise<boolean> {
-    try {
-      const key = this.getTransactionKey(accountId, periodType);
-      const exists = await this.redis.exists(key);
-      return exists === 1;
-    } catch (error) {
-      logger.error('Failed to check cache validity', { accountId, periodType, error });
-      return false;
-    }
+    // With reads disabled, always report invalid to force live fetches
+    logger.debug('Cache validity bypassed (reads disabled)', { accountId, periodType });
+    return false;
   }
 
   async setCacheMetadata(
@@ -240,18 +186,8 @@ export class RedisCachedTransactionServiceImpl implements RedisCachedTransaction
     transactionCount: number;
     totalRevenue: number;
   } | null> {
-    try {
-      const key = this.getMetadataKey(accountId, periodType);
-      const data = await this.redis.get(key);
-      
-      if (!data) {
-        return null;
-      }
-
-      return JSON.parse(data);
-    } catch (error) {
-      logger.error('Failed to get cache metadata', { accountId, periodType, error });
-      return null;
-    }
+    // Disable cache reads globally: always miss
+    logger.debug('Cache read bypassed for metadata (reads disabled)', { accountId, periodType });
+    return null;
   }
 }

@@ -304,7 +304,7 @@ export class BNPLService {
     }
   }
 
-  async acceptTerms(termsId: string, accountId: string): Promise<{ success: boolean; transactionId?: string }> {
+  async acceptTerms(termsId: string, accountId: string): Promise<{ success: boolean; transactionId?: string; smartContractAgreementId?: string }> {
     try {
       // First, get the current terms to validate
       const { data: currentTerms, error: fetchError } = await this.supabase
@@ -481,11 +481,12 @@ export class BNPLService {
           transactionId: contractResult.transactionId
         });
 
-        // Update the terms with the smart contract transaction ID (stored in agreement_id column)
+        // Update the terms with the smart contract agreement ID (prefer agreementId over transactionId)
+        const storedAgreementId = contractResult.agreementId || contractResult.transactionId || null;
         await this.supabase
           .from('bnpl_terms')
           .update({ 
-            smart_contract_agreement_id: contractResult.transactionId || null
+            smart_contract_agreement_id: storedAgreementId
           })
           .eq('id', termsId);
 
@@ -565,9 +566,11 @@ export class BNPLService {
           // Don't fail the whole operation if HCS logging fails
         }
 
+        const agreementId = contractResult.agreementId || contractResult.transactionId;
         return {
           success: true,
-          transactionId: contractResult.transactionId || ''
+          transactionId: contractResult.transactionId || '',
+          ...(agreementId && { smartContractAgreementId: agreementId })
         };
       } catch (error) {
         logger.error('Error executing smart contract for BNPL terms', {
@@ -709,7 +712,8 @@ export class BNPLService {
         expiresAt: terms.expires_at,
         createdAt: terms.created_at,
         ...(terms.accepted_at && { acceptedAt: terms.accepted_at }),
-        ...(terms.rejected_at && { rejectedAt: terms.rejected_at })
+        ...(terms.rejected_at && { rejectedAt: terms.rejected_at }),
+        ...(terms.smart_contract_agreement_id && { smartContractAgreementId: terms.smart_contract_agreement_id })
       }));
     } catch (error) {
       logger.error('Error getting pending BNPL terms for merchant', { error, merchantAccountId });
@@ -746,7 +750,8 @@ export class BNPLService {
         expiresAt: terms.expires_at,
         createdAt: terms.created_at,
         ...(terms.accepted_at && { acceptedAt: terms.accepted_at }),
-        ...(terms.rejected_at && { rejectedAt: terms.rejected_at })
+        ...(terms.rejected_at && { rejectedAt: terms.rejected_at }),
+        ...(terms.smart_contract_agreement_id && { smartContractAgreementId: terms.smart_contract_agreement_id })
       }));
     } catch (error) {
       logger.error('Error getting BNPL terms for merchant', { error, merchantAccountId });
@@ -784,7 +789,8 @@ export class BNPLService {
         expiresAt: terms.expires_at,
         createdAt: terms.created_at,
         ...(terms.accepted_at && { acceptedAt: terms.accepted_at }),
-        ...(terms.rejected_at && { rejectedAt: terms.rejected_at })
+        ...(terms.rejected_at && { rejectedAt: terms.rejected_at }),
+        ...(terms.smart_contract_agreement_id && { smartContractAgreementId: terms.smart_contract_agreement_id })
       }));
     } catch (error) {
       logger.error('Error getting BNPL terms for buyer', { error, buyerAccountId });
@@ -1082,7 +1088,7 @@ export class BNPLService {
         });
 
         // Use quoted toAmount as the payer charge in their currency
-        burnAmount = quote.toAmount;
+        burnAmount = quote.toAmount * quote.exchangeRate;
 
         logger.info('Currency quote resolved for payer charge', {
           agreementId,

@@ -1,3 +1,4 @@
+import React from 'react';
 import { Tabs } from 'expo-router';
 import { Wallet, ShoppingCart, Users, Settings } from 'lucide-react-native';
 

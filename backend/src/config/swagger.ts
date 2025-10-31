@@ -225,6 +225,12 @@ const options: swaggerJsdoc.Options = {
               type: 'boolean',
               description: 'Account status',
               example: true
+            },
+            currency: {
+              type: 'string',
+              description: 'Account preferred currency',
+              example: 'USD',
+              enum: ['ZAR', 'USD']
             }
           }
         },

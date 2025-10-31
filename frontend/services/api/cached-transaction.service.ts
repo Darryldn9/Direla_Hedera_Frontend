@@ -39,7 +39,7 @@ export class CachedTransactionServiceImpl extends BaseApiService implements Cach
     periodType: 'daily' | 'weekly' | 'monthly' | 'all',
     startTime?: number,
     endTime?: number,
-    forceRefresh: boolean = false
+    forceRefresh: boolean = true
   ): Promise<ApiResponse<TransactionHistoryItem[]>> {
     const queryParams = new URLSearchParams();
     if (startTime) queryParams.append('startTime', startTime.toString());
