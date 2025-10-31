@@ -6,15 +6,41 @@ import {
   CurrencyQuote
 } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { config } from '../config/index.js';
 
 export class ExternalApiInfrastructure {
   private baseUrl: string;
   private apiKey: string;
+  private currencyClient?: any;
+  private currencyApiKey: string = '';
+  private currencyClientInit?: Promise<void>;
 
   constructor(baseUrl: string, apiKey: string) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
     logger.info('External API client initialized', { baseUrl });
+
+    const freeCurrencyKey = config.externalApi.freeCurrencyApiKey || process.env.FREE_CURRENCY_API_KEY || '';
+    this.currencyApiKey = freeCurrencyKey;
+    if (!freeCurrencyKey) {
+      logger.warn('FREE_CURRENCY_API_KEY not set; currency conversion will fallback or fail');
+    }
+  }
+
+  private async ensureCurrencyClient(): Promise<void> {
+    if (this.currencyClient) return;
+    if (!this.currencyApiKey) {
+      throw new Error('Currency API client not initialized. Set FREE_CURRENCY_API_KEY.');
+    }
+    if (!this.currencyClientInit) {
+      this.currencyClientInit = (async () => {
+        const mod = await import('@everapi/freecurrencyapi-js');
+        const Freecurrencyapi = (mod as any).default || (mod as any);
+        this.currencyClient = new Freecurrencyapi(this.currencyApiKey);
+        logger.info('Freecurrencyapi client initialized');
+      })();
+    }
+    await this.currencyClientInit;
   }
 
   async notifyExternalService(request: ExternalNotificationRequest): Promise<ExternalNotificationResponse> {
@@ -88,13 +114,46 @@ export class ExternalApiInfrastructure {
         amount: request.amount
       });
 
-      // For now, simulate currency conversion
-      // In production, integrate with real exchange rate API (e.g., CoinGecko, Fixer.io)
-      const response = await this.simulateCurrencyConversion(request);
+      const fromCurrency = request.fromCurrency.toUpperCase();
+      const toCurrency = request.toCurrency.toUpperCase();
+
+      if (fromCurrency === toCurrency) {
+        return {
+          fromCurrency,
+          toCurrency,
+          fromAmount: request.amount,
+          toAmount: request.amount,
+          exchangeRate: 1.0,
+          timestamp: Date.now()
+        };
+      }
+
+      await this.ensureCurrencyClient();
+
+      const latest = await this.currencyClient.latest({
+        base_currency: fromCurrency,
+        currencies: toCurrency
+      });
+
+      const rate = latest?.data?.[toCurrency];
+      if (typeof rate !== 'number') {
+        throw new Error(`Exchange rate not available for ${fromCurrency} to ${toCurrency}`);
+      }
+
+      const toAmount = request.amount * rate;
+
+      const response: CurrencyConversionResponse = {
+        fromCurrency,
+        toCurrency,
+        fromAmount: request.amount,
+        toAmount,
+        exchangeRate: rate,
+        timestamp: Date.now()
+      };
 
       logger.info('Currency conversion completed', { 
-        fromCurrency: request.fromCurrency,
-        toCurrency: request.toCurrency,
+        fromCurrency,
+        toCurrency,
         exchangeRate: response.exchangeRate
       });
 

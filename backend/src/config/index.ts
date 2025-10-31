@@ -36,7 +36,8 @@ export const config = {
   
   externalApi: {
     baseUrl: process.env.EXTERNAL_API_URL || 'https://api.example.com',
-    apiKey: process.env.EXTERNAL_API_KEY || 'demo-key'
+    apiKey: process.env.EXTERNAL_API_KEY || 'demo-key',
+    freeCurrencyApiKey: process.env.FREE_CURRENCY_API_KEY || ''
   },
 
   redis: {
