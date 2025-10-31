@@ -25,7 +25,7 @@ export interface UseBNPLReturn {
   // Actions
   createTerms: (request: CreateBNPLTermsRequest) => Promise<BNPLTerms | null>;
   getTerms: (paymentId: string, accountId: string) => Promise<BNPLTerms | null>;
-  acceptTerms: (termsId: string, accountId: string) => Promise<boolean>;
+  acceptTerms: (termsId: string, accountId: string) => Promise<{ success: boolean; smartContractAgreementId?: string }>;
   rejectTerms: (termsId: string, accountId: string, reason?: string) => Promise<boolean>;
   getPendingTermsForMerchant: (merchantAccountId: string) => Promise<BNPLTerms[]>;
   getTermsForMerchant: (merchantAccountId: string) => Promise<BNPLTerms[]>;
@@ -112,7 +112,7 @@ export function useBNPL(): UseBNPLReturn {
     }
   }, []);
 
-  const acceptTerms = useCallback(async (termsId: string, accountId: string): Promise<boolean> => {
+  const acceptTerms = useCallback(async (termsId: string, accountId: string): Promise<{ success: boolean; smartContractAgreementId?: string }> => {
     setIsLoading(true);
     setError(null);
 
@@ -128,7 +128,10 @@ export function useBNPL(): UseBNPLReturn {
         if (terms && terms.id === termsId) {
           setTerms(prev => prev ? { ...prev, status: 'ACCEPTED', acceptedAt: Date.now() } : null);
         }
-        return true;
+        return {
+          success: true,
+          smartContractAgreementId: response.smartContractAgreementId
+        };
       }
 
       console.log('[useBNPL] Accept terms failed - response not successful:', response);
@@ -137,7 +140,7 @@ export function useBNPL(): UseBNPLReturn {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
       console.error('[useBNPL] Error accepting BNPL terms:', err);
-      return false;
+      return { success: false };
     } finally {
       setIsLoading(false);
     }

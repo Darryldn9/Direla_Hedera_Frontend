@@ -37,7 +37,7 @@ export function useTransactionHistory(accountId?: string, limit: number = 50): U
       const response = await hederaService.getTransactionHistory(targetAccountId, transactionLimit || limit);
       
       if (response.success && response.data) {
-        // console.log('Transaction history fetched successfully:', response.data);
+        console.log('Transaction history fetched successfully:', response.data);
         setTransactions(response.data);
         setLastUpdated(new Date());
       } else {

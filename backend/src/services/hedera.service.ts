@@ -604,7 +604,7 @@ export class HederaServiceImpl implements HederaService {
     }
   }
 
-  async getTransactionHistory(accountId: string, limit: number = 50, forceRefresh: boolean = false): Promise<TransactionHistoryItem[]> {
+  async getTransactionHistory(accountId: string, limit: number = 50, forceRefresh: boolean = true): Promise<TransactionHistoryItem[]> {
     try {
       logger.info('Getting transaction history', { accountId, limit, forceRefresh });
 

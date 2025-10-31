@@ -67,6 +67,7 @@ function BNPLTermsSection() {
   const [alertConfig, setAlertConfig] = useState<{
     title: string;
     message: string;
+    agreementId?: string;
     buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }>;
   }>({
     title: '',
@@ -75,8 +76,8 @@ function BNPLTermsSection() {
   });
 
   // Custom alert function
-  const showCustomAlertModal = (title: string, message: string, buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }>) => {
-    setAlertConfig({ title, message, buttons });
+  const showCustomAlertModal = (title: string, message: string, buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }>, agreementId?: string) => {
+    setAlertConfig({ title, message, buttons, agreementId });
     setShowCustomAlert(true);
   };
 
@@ -84,14 +85,14 @@ function BNPLTermsSection() {
     if (!selectedAccount) return;
     
     const terms = await getPendingTermsForMerchant(selectedAccount.account_id);
-    setPendingTerms(terms);
+    setPendingTerms(terms || []);
   };
 
   const loadHistoryTerms = async () => {
     if (!selectedAccount) return;
 
     const terms = await getTermsForMerchant(selectedAccount.account_id);
-    setHistoryTerms(terms);
+    setHistoryTerms(terms || []);
   };
 
   const loadAccountAliases = async () => {
@@ -118,6 +119,7 @@ function BNPLTermsSection() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadPendingTerms();
+    await loadHistoryTerms();
     setRefreshing(false);
   };
 
@@ -139,15 +141,22 @@ function BNPLTermsSection() {
             try {
               // Show loading toast while waiting for acceptance confirmation
               showInfo('Confirming BNPL acceptance…', 'Please wait while we confirm with the network.', 30000);
-              const success = await acceptTerms(termsId, selectedAccount.account_id);
-              console.log('[Lending] Accept terms result:', success);
-              if (success) {
+              const result = await acceptTerms(termsId, selectedAccount.account_id);
+              console.log('[Lending] Accept terms result:', result);
+              if (result.success) {
                 hideAllToasts();
                 showSuccess('BNPL terms accepted', 'The customer will be charged in installments.', 4000);
-                showCustomAlertModal('Success', 'BNPL terms accepted successfully!', [
-                  { text: 'OK', onPress: () => setShowCustomAlert(false) }
-                ]);
-                loadPendingTerms();
+                
+                showCustomAlertModal(
+                  'Success',
+                  'BNPL terms accepted successfully!',
+                  [
+                    { text: 'OK', onPress: () => setShowCustomAlert(false) }
+                  ],
+                  result.smartContractAgreementId
+                );
+                await loadPendingTerms();
+                await loadHistoryTerms();
               } else {
                 hideAllToasts();
                 showError('Failed to accept BNPL terms', 'Please try again.');
@@ -184,7 +193,8 @@ function BNPLTermsSection() {
             const success = await rejectTerms(termsId, selectedAccount.account_id, 'Merchant rejected');
             if (success) {
               Alert.alert('Rejected', 'BNPL terms have been rejected.');
-              loadPendingTerms();
+              await loadPendingTerms();
+              await loadHistoryTerms();
             }
           }
         }
@@ -250,7 +260,13 @@ function BNPLTermsSection() {
       <View style={styles.bnplLinkContainerLeft}>
         <TouchableOpacity 
           style={styles.bnplPlainLink}
-          onPress={() => setShowHistory(prev => !prev)}
+          onPress={async () => {
+            if (!showHistory) {
+              // Reload history when opening
+              await loadHistoryTerms();
+            }
+            setShowHistory(prev => !prev);
+          }}
         >
           <Clock size={16} color="#6B7280" />
           <Text style={styles.bnplLinkTextMuted}>View Previous Terms</Text>
@@ -268,7 +284,7 @@ function BNPLTermsSection() {
         </View>
       )}
 
-      {pendingTerms.length === 0 ? (
+      {!Array.isArray(pendingTerms) || pendingTerms.length === 0 ? (
         <View style={styles.emptyState}>
           <CreditCard size={48} color="#8E8E93" />
           <Text style={styles.emptyTitle}>No Pending BNPL Terms</Text>
@@ -278,8 +294,36 @@ function BNPLTermsSection() {
         </View>
       ) : (
         <View style={styles.termsList}>
-          {pendingTerms.map((terms) => (
-            <View key={terms.id} style={styles.termsCard}>
+          {pendingTerms.map((terms) => {
+            if (!terms || !terms.id) {
+              return null;
+            }
+            return (
+            <TouchableOpacity 
+              key={terms.id} 
+              style={styles.termsCard}
+              onPress={() => {
+                if (terms.smartContractAgreementId) {
+                  showCustomAlertModal(
+                    'Smart Contract Agreement ID',
+                    'The Hedera smart contract agreement ID for these BNPL terms:',
+                    [
+                      { text: 'OK', onPress: () => setShowCustomAlert(false) }
+                    ],
+                    terms.smartContractAgreementId
+                  );
+                } else {
+                  showCustomAlertModal(
+                    'Smart Contract Agreement ID',
+                    'Smart contract agreement ID is not available for this terms yet. It will be generated when the terms are accepted.',
+                    [
+                      { text: 'OK', onPress: () => setShowCustomAlert(false) }
+                    ]
+                  );
+                }
+              }}
+              activeOpacity={0.7}
+            >
               <View style={styles.termsHeader}>
                 <View style={styles.statusContainer}>
                   {getStatusIcon(terms.status)}
@@ -370,8 +414,9 @@ function BNPLTermsSection() {
                   </Text>
                 </View>
               )}
-            </View>
-          ))}
+            </TouchableOpacity>
+          );
+          })}
         </View>
       )}
 
@@ -386,6 +431,16 @@ function BNPLTermsSection() {
           <View style={styles.alertModal}>
             <Text style={styles.alertTitle}>{alertConfig.title}</Text>
             <Text style={styles.alertMessage}>{alertConfig.message}</Text>
+            {alertConfig.agreementId && (
+              <View style={styles.agreementIdContainer}>
+                <Text style={styles.agreementIdLabel}>Smart Contract Agreement ID:</Text>
+                <View style={styles.agreementIdValueContainer}>
+                  <Text style={styles.agreementIdValue} selectable>
+                    {alertConfig.agreementId}
+                  </Text>
+                </View>
+              </View>
+            )}
             <View style={styles.alertButtons}>
               {alertConfig.buttons.map((button, index) => (
                 <TouchableOpacity
@@ -415,31 +470,59 @@ function BNPLTermsSection() {
       {showHistory && (
         <View style={{ marginTop: 8 }}>
           <Text style={styles.sectionTitle}>Previous BNPL Terms</Text>
-          {historyTerms.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Clock size={48} color="#8E8E93" />
-              <Text style={styles.emptyTitle}>No Previous Terms</Text>
-              <Text style={styles.emptyDescription}>Accepted, rejected, and expired terms will appear here.</Text>
-            </View>
-          ) : (
-            <View style={styles.historyContainerTight}>
-              <View style={styles.historyList}>
-                {historyTerms.map((t) => (
-                  <View key={t.id} style={styles.historyItem}>
-                    <View style={styles.historyTopRow}>
-                      <Text style={styles.historyAmount}>{formatCurrency(t.totalAmount, t.currency)}</Text>
-                      <Text style={[styles.historyStatus, { color: getStatusColor(t.status) }]}>{t.status}</Text>
-                    </View>
-                    <View style={styles.historyMetaRow}>
-                      <Text style={styles.historyMeta}>Installments: {t.installmentCount}</Text>
-                      <Text style={styles.historyMeta}>Buyer: {accountAliasMap[t.buyerAccountId] || t.buyerAccountId}</Text>
-                    </View>
-                    <Text style={styles.historyDate}>{new Date(t.createdAt).toLocaleString()}</Text>
-                  </View>
-                ))}
+          {(() => {
+            // Filter out PENDING terms - they're shown in the main list above
+            const nonPendingTerms = historyTerms.filter(t => t.status !== 'PENDING');
+            return nonPendingTerms.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Clock size={48} color="#8E8E93" />
+                <Text style={styles.emptyTitle}>No Previous Terms</Text>
+                <Text style={styles.emptyDescription}>Accepted, rejected, and expired terms will appear here.</Text>
               </View>
-            </View>
-          )}
+            ) : (
+              <View style={styles.historyContainerTight}>
+                <View style={styles.historyList}>
+                  {nonPendingTerms.map((t) => (
+                    <TouchableOpacity 
+                      key={t.id} 
+                      style={styles.historyItem}
+                      onPress={() => {
+                        if (t.smartContractAgreementId) {
+                          showCustomAlertModal(
+                            'Smart Contract Agreement ID',
+                            'The Hedera smart contract agreement ID for these BNPL terms:',
+                            [
+                              { text: 'OK', onPress: () => setShowCustomAlert(false) }
+                            ],
+                            t.smartContractAgreementId
+                          );
+                        } else {
+                          showCustomAlertModal(
+                            'Smart Contract Agreement ID',
+                            'Smart contract agreement ID is not available for this terms.',
+                            [
+                              { text: 'OK', onPress: () => setShowCustomAlert(false) }
+                            ]
+                          );
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.historyTopRow}>
+                        <Text style={styles.historyAmount}>{formatCurrency(t.totalAmount, t.currency)}</Text>
+                        <Text style={[styles.historyStatus, { color: getStatusColor(t.status) }]}>{t.status}</Text>
+                      </View>
+                      <View style={styles.historyMetaRow}>
+                        <Text style={styles.historyMeta}>Installments: {t.installmentCount}</Text>
+                        <Text style={styles.historyMeta}>Buyer: {accountAliasMap[t.buyerAccountId] || t.buyerAccountId}</Text>
+                      </View>
+                      <Text style={styles.historyDate}>{new Date(t.createdAt).toLocaleString()}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            );
+          })()}
         </View>
       )}
     </ScrollView>
@@ -1707,6 +1790,30 @@ const styles = StyleSheet.create({
     color: Colors.semantic.textSecondary,
     lineHeight: 20,
     marginBottom: 24,
+    textAlign: 'center',
+  },
+  agreementIdContainer: {
+    marginBottom: 24,
+    marginTop: -12,
+  },
+  agreementIdLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.semantic.textSecondary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  agreementIdValueContainer: {
+    backgroundColor: Colors.semantic.surface,
+    borderWidth: 1,
+    borderColor: Colors.semantic.border,
+    borderRadius: 8,
+    padding: 12,
+  },
+  agreementIdValue: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    color: Colors.semantic.textPrimary,
     textAlign: 'center',
   },
   alertButtons: {

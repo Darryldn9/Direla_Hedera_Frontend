@@ -235,6 +235,7 @@ export interface BNPLTerms {
   createdAt: number; // Unix timestamp
   acceptedAt?: number; // Unix timestamp
   rejectedAt?: number; // Unix timestamp
+  smartContractAgreementId?: string; // Hedera smart contract agreement ID
 }
 
 export interface CreateBNPLTermsRequest {
@@ -274,6 +275,7 @@ export interface AcceptBNPLTermsResponse {
   success: boolean;
   message?: string;
   transactionId?: string;
+  smartContractAgreementId?: string;
 }
 
 export interface RejectBNPLTermsRequest {

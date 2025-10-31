@@ -85,7 +85,7 @@ export class BNPLService extends BaseApiService {
   async acceptTerms(termsId: string, accountId: string): Promise<AcceptBNPLTermsResponse | null> {
     try {
       console.log('[BNPLService] Accepting terms:', termsId, 'account:', accountId);
-      const response = await this.post<{ success: boolean; transactionId?: string }>(
+      const response = await this.post<{ success: boolean; transactionId?: string; smartContractAgreementId?: string }>(
         API_ENDPOINTS.BNPL_TERMS_ACCEPT(termsId),
         { accountId }
       );
@@ -96,7 +96,8 @@ export class BNPLService extends BaseApiService {
         const result = {
           success: response.data.success,
           message: response.message,
-          transactionId: response.data.transactionId
+          transactionId: response.data.transactionId,
+          smartContractAgreementId: response.data.smartContractAgreementId
         };
         console.log('[BNPLService] Returning success result:', result);
         return result;
@@ -140,7 +141,7 @@ export class BNPLService extends BaseApiService {
       );
       
       if (response?.success && response.data) {
-        return response.data;
+        return Array.isArray(response.data) ? response.data : [];
       }
       
       return [];

@@ -15,6 +15,7 @@ import DepositModal from '../../components/DepositModal';
 import SendModal from '../../components/SendModal';
 import RequestModal from '../../components/RequestModal';
 import WithdrawModal from '../../components/WithdrawModal';
+import SaleDetailsModal from '../../components/SaleDetailsModal';
 import PageHeader from '../../components/PageHeader';
 import { Colors } from '../../lib/colors';
 
@@ -34,6 +35,14 @@ function WalletScreen() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  
+  // State for transaction details modal
+  const [selectedTransaction, setSelectedTransaction] = useState<{
+    transactionId: string;
+    fromAccount: string;
+    toAccount: string;
+  } | null>(null);
+  
   const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
 
@@ -361,8 +370,41 @@ function WalletScreen() {
                 }
               };
 
+              // Get the actual account IDs from the transaction
+              // The backend sets these correctly: 
+              // - For receives: from = sender account, to = current account
+              // - For sends: from = current account, to = recipient account
+              const fromAccountId = transaction.from || '';
+              const toAccountId = transaction.to || '';
+              
+              // Debug: Log if accounts are the same (shouldn't happen normally)
+              if (fromAccountId === toAccountId && fromAccountId !== '') {
+                console.warn('Transaction has same from/to accounts:', {
+                  transactionId: transaction.transactionId,
+                  fromAccount: fromAccountId,
+                  toAccount: toAccountId,
+                  type: transaction.type,
+                });
+              }
+              
               return (
-                <TouchableOpacity key={`tx-${transaction.transactionId}=${Math.random()}`} style={styles.transactionItem}>
+                <TouchableOpacity 
+                  key={`tx-${transaction.transactionId}=${Math.random()}`} 
+                  style={styles.transactionItem}
+                  onPress={() => {
+                    console.log('Transaction details:', {
+                      transactionId: transaction.transactionId,
+                      fromAccount: fromAccountId,
+                      toAccount: toAccountId,
+                      type: transaction.type,
+                    });
+                    setSelectedTransaction({
+                      transactionId: transaction.transactionId,
+                      fromAccount: fromAccountId,
+                      toAccount: toAccountId,
+                    });
+                  }}
+                >
                   <View style={styles.transactionIcon}>
                     {getTransactionIcon(getTransactionIconType())}
                   </View>
@@ -443,6 +485,15 @@ function WalletScreen() {
             // In a real app, you would initiate a withdrawal
             setShowWithdrawModal(false);
           }}
+        />
+        
+        {/* Transaction Details Modal */}
+        <SaleDetailsModal
+          visible={selectedTransaction !== null}
+          onClose={() => setSelectedTransaction(null)}
+          transactionId={selectedTransaction?.transactionId || ''}
+          fromAccount={selectedTransaction?.fromAccount || ''}
+          toAccount={selectedTransaction?.toAccount || ''}
         />
       </ScrollView>
     </SafeAreaView>
