@@ -5,6 +5,7 @@ import { NewBNPLTerms } from '../database/schema';
 import { logger } from '../utils/logger';
 import { CurrencyQuote, CurrencyConversionRequest } from '../types/index';
 import { ExternalApiInfrastructure } from '../infrastructure/external-api';
+import { config } from '../config/index';
 import { BNPLContractInfrastructure } from '../infrastructure/bnpl-contract';
 import { HederaInfrastructure } from '../infrastructure/hedera';
 import { ethers } from 'ethers';
@@ -12,7 +13,10 @@ import { NotificationsService } from './notifications.service';
 
 export class BNPLService {
   private supabase = getSupabaseClient();
-  private externalApi = new ExternalApiInfrastructure('https://api.example.com', 'your-api-key');
+  private externalApi = new ExternalApiInfrastructure(
+    config.externalApi.baseUrl,
+    config.externalApi.apiKey
+  );
   private bnplContract = new BNPLContractInfrastructure();
   private hederaInfra: HederaInfrastructure;
   private readonly PLATFORM_ISSUER = 'did:hedera:testnet:platform-0.0.9999';
